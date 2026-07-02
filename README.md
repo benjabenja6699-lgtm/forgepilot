@@ -17,7 +17,7 @@ python .\tools\workflow-launcher\workflow_launcher.py
 ## One-line bootstrap
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\launch.ps1
+irm https://raw.githubusercontent.com/benjabenja6699-lgtm/forgepilot/main/bootstrap.ps1 | iex
 ```
 
 ## Build exe
