@@ -322,9 +322,10 @@ class ActionPanel(ttk.Frame):
 
 
 class ToolsPanel(ttk.Frame):
-    def __init__(self, parent, log_fn) -> None:
+    def __init__(self, parent, log_fn, palette: dict[str, str]) -> None:
         super().__init__(parent, padding=14)
         self.log = log_fn
+        self.palette = palette
         self.current_tool: ToolInfo | None = None
 
         ttk.Label(self, text="Herramientas", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 4))
@@ -526,7 +527,7 @@ class LauncherApp(tk.Tk):
         config_nb.add(win_config, text="Windows")
         config_nb.add(lin_config, text="Linux")
 
-        tools_panel = ToolsPanel(tools_tab, self._log)
+        tools_panel = ToolsPanel(tools_tab, self._log, self.palette)
         tools_panel.pack(fill="both", expand=True)
 
         self.log_text = tk.Text(logs_tab, wrap="word")
