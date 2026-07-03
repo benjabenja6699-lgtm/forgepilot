@@ -418,14 +418,16 @@ class LauncherApp(tk.Tk):
         self.minsize(1060, 740)
 
         self.palette = {
-            "bg": "#f4efe6",
-            "panel": "#fcfaf6",
-            "panel_2": "#f7f2ea",
+            "bg": "#ffffff",
+            "panel": "#ffffff",
+            "panel_2": "#faf8f4",
             "text": "#1e1914",
             "muted": "#6f685f",
             "accent": "#c47b2b",
             "accent_2": "#8f5f1f",
-            "entry": "#fffdf8",
+            "entry": "#ffffff",
+            "line": "#ece6dc",
+            "soft": "#f3eee5",
         }
 
         self.repo_var = tk.StringVar(value=str(Path.cwd()))
@@ -455,10 +457,16 @@ class LauncherApp(tk.Tk):
         style.configure("HeroTitle.TLabel", background=self.palette["panel"], foreground=self.palette["text"], font=("Segoe UI", 15, "bold"))
         style.configure("Section.TLabel", background=self.palette["panel"], foreground=self.palette["text"], font=("Segoe UI", 10, "bold"))
         style.configure("Muted.TLabel", background=self.palette["panel"], foreground=self.palette["muted"], font=("Segoe UI", 9))
-        style.configure("TButton", background=self.palette["panel"], foreground=self.palette["text"], padding=(10, 7), relief="flat")
+        style.configure("TButton", background=self.palette["panel"], foreground=self.palette["text"], padding=(8, 6), relief="flat")
         style.map(
             "TButton",
             background=[("active", self.palette["panel_2"])],
+            foreground=[("active", self.palette["text"])],
+        )
+        style.configure("Nav.TButton", background=self.palette["panel"], foreground=self.palette["text"], padding=(10, 8), relief="flat", anchor="w")
+        style.map(
+            "Nav.TButton",
+            background=[("active", self.palette["soft"])],
             foreground=[("active", self.palette["text"])],
         )
         style.configure("TCheckbutton", background=self.palette["panel"], foreground=self.palette["text"], font=("Segoe UI", 10))
@@ -467,25 +475,25 @@ class LauncherApp(tk.Tk):
         style.configure("TScrollbar", background=self.palette["panel"], troughcolor=self.palette["bg"], arrowcolor=self.palette["text"])
 
     def _build_ui(self) -> None:
-        root = ttk.Frame(self, padding=14, style="Card.TFrame")
+        root = ttk.Frame(self, padding=12, style="Card.TFrame")
         root.pack(fill="both", expand=True)
 
-        sidebar = ttk.Frame(root, width=220, padding=(4, 4, 16, 4), style="Sidebar.TFrame")
+        sidebar = ttk.Frame(root, width=250, padding=(6, 8, 18, 8), style="Sidebar.TFrame")
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
-        brand = ttk.Frame(sidebar, padding=(10, 10, 10, 18), style="Sidebar.TFrame")
+        brand = ttk.Frame(sidebar, padding=(8, 8, 8, 14), style="Sidebar.TFrame")
         brand.pack(fill="x")
         badge_row = ttk.Frame(brand, style="Sidebar.TFrame")
-        badge_row.pack(anchor="w", pady=(0, 10))
-        badge = tk.Canvas(badge_row, width=26, height=26, bg=self.palette["panel"], highlightthickness=0)
-        badge.create_rectangle(2, 2, 24, 24, outline=self.palette["accent"], width=1)
+        badge_row.pack(anchor="w", pady=(0, 12))
+        badge = tk.Canvas(badge_row, width=24, height=24, bg=self.palette["panel"], highlightthickness=0)
+        badge.create_rectangle(2, 2, 22, 22, outline=self.palette["accent"], width=1)
         badge.create_text(13, 13, text="FP", fill=self.palette["text"], font=("Segoe UI", 8, "bold"))
         badge.pack(side="left")
-        ttk.Label(brand, text="ForgePilot", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 2))
+        ttk.Label(brand, text="ForgePilot", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 1))
         ttk.Label(brand, text="Launcher portable", style="Muted.TLabel").pack(anchor="w")
 
-        ttk.Label(sidebar, text="Secciones", style="Muted.TLabel").pack(anchor="w", padx=12, pady=(8, 8))
+        ttk.Label(sidebar, text="Secciones", style="Muted.TLabel").pack(anchor="w", padx=8, pady=(10, 8))
 
         nav_buttons = {}
         for key, label in [
@@ -499,15 +507,15 @@ class LauncherApp(tk.Tk):
                 sidebar,
                 text=label,
                 command=lambda page=key: self._show_page(page),
-                style="TButton",
+                style="Nav.TButton",
             )
-            nav_buttons[key].pack(fill="x", padx=8, pady=4)
+            nav_buttons[key].pack(fill="x", padx=4, pady=2)
 
-        content = ttk.Frame(root, padding=(18, 8, 8, 8), style="Card.TFrame")
+        content = ttk.Frame(root, padding=(22, 10, 10, 10), style="Card.TFrame")
         content.pack(side="left", fill="both", expand=True)
 
         top = ttk.Frame(content, style="Card.TFrame")
-        top.pack(fill="x", pady=(0, 14))
+        top.pack(fill="x", pady=(0, 18))
         top.grid_columnconfigure(0, weight=1)
         top.grid_columnconfigure(1, weight=0)
         ttk.Entry(top, textvariable=self.repo_var, width=60).grid(row=0, column=0, sticky="ew", padx=(0, 12))
@@ -540,9 +548,9 @@ class LauncherApp(tk.Tk):
         ).pack(anchor="w", pady=(4, 18))
 
         env_row = ttk.Frame(parent, style="Card.TFrame")
-        env_row.pack(fill="x", pady=(0, 18))
+        env_row.pack(fill="x", pady=(0, 14))
         ttk.Button(env_row, text="Windows", command=lambda: self._swap_installers("windows")).pack(side="left")
-        ttk.Button(env_row, text="Linux", command=lambda: self._swap_installers("linux")).pack(side="left", padx=8)
+        ttk.Button(env_row, text="Linux", command=lambda: self._swap_installers("linux")).pack(side="left", padx=6)
 
         self.installers_stack = ttk.Frame(parent, style="Card.TFrame")
         self.installers_stack.pack(fill="both", expand=True)
@@ -585,9 +593,9 @@ class LauncherApp(tk.Tk):
         ).pack(anchor="w", pady=(4, 18))
 
         env_row = ttk.Frame(parent, style="Card.TFrame")
-        env_row.pack(fill="x", pady=(0, 18))
+        env_row.pack(fill="x", pady=(0, 14))
         ttk.Button(env_row, text="Windows", command=lambda: self._swap_configs("windows")).pack(side="left")
-        ttk.Button(env_row, text="Linux", command=lambda: self._swap_configs("linux")).pack(side="left", padx=8)
+        ttk.Button(env_row, text="Linux", command=lambda: self._swap_configs("linux")).pack(side="left", padx=6)
 
         self.configs_stack = ttk.Frame(parent, style="Card.TFrame")
         self.configs_stack.pack(fill="both", expand=True)
