@@ -1,12 +1,11 @@
 # ForgePilot Launcher
 
-One-click Windows launcher for the workflow:
+One-click launcher for the workflow suite:
 
-- Graphify
-- Caveman
-- AGENTS.md
-- git hook
-- repo kit setup
+- `Instaladores` tab with `Windows` and `Linux`
+- `Configuraciones` tab with `Windows` and `Linux`
+- `Logs`
+- `Settings`
 
 ## Start
 

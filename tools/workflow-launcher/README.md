@@ -1,13 +1,12 @@
 # Workflow Launcher
 
-Windows launcher for:
+Tabbed launcher for:
 
-- Graphify install
-- Caveman skill install
-- repo AI rules kit setup
-- AGENTS.md install
-- git hook install
-- Graphify map build
+- `Instaladores`
+- `Configuraciones`
+- Windows and Linux sub-tabs
+- `Logs`
+- `Settings`
 
 ## Run
 
