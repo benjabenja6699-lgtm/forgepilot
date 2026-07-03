@@ -238,7 +238,6 @@ class ActionPanel(ttk.Frame):
         self,
         parent,
         title: str,
-        description: str,
         actions: list[ActionSpec],
         repo_var: tk.StringVar,
         log_fn,
