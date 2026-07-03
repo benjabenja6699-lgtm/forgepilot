@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+set -eu
+
+# Block non-trivial code commits if the graph has not been prepared.
+# This does not enforce model behavior. It only prevents accidental bypasses.
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+graph_file="$repo_root/graphify-out/graph.json"
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR || true)
+if [ -z "$staged_files" ]; then
+  exit 0
+fi
+
+code_count=$(printf '%s\n' "$staged_files" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|dart|py|go|rs|java|kt|swift|cpp|cc|c|h|hpp)$' | wc -l | tr -d ' ')
+
+if [ "$code_count" -eq 0 ]; then
+  exit 0
+fi
+
+if [ ! -f "$graph_file" ]; then
+  cat <<EOF
+Graphify gate: missing graphify-out/graph.json.
+Run Graphify first, build the packet, then ask DeepSeek for the heavy analysis.
+EOF
+  exit 1
+fi
+
+exit 0

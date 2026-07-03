@@ -12,6 +12,7 @@ pyinstaller `
     --onefile `
     --windowed `
     --name "AIWorkflowLauncher" `
+    --add-data "assets;assets" `
     .\workflow_launcher.py
 
 Write-Host "Built: $here\dist\AIWorkflowLauncher.exe"

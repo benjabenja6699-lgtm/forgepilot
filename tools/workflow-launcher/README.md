@@ -1,12 +1,26 @@
 # Workflow Launcher
 
-Tabbed launcher for:
+Portable launcher for:
+
+- Windows and Linux CLI installers
+- Graphify install
+- Caveman skill install
+- AGENTS.md install
+- `.codex/config.toml` install
+- `mcp.json` install
+- git hook install
+- optional Graphify map build
+
+The launcher ships its own templates in `tools/workflow-launcher/assets/`.
+It does not depend on `docs/ai_rules_kit/` or any project-specific paths.
+
+## UI layout
 
 - `Instaladores`
 - `Configuraciones`
-- Windows and Linux sub-tabs
+- `Herramientas`
 - `Logs`
-- `Settings`
+- `Ajustes`
 
 ## Run
 

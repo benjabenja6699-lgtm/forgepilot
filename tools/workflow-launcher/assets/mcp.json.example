@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "openaiDeveloperDocs": {
+      "type": "http",
+      "url": "https://developers.openai.com/mcp"
+    },
+    "deepseek-bridge": {
+      "command": "node",
+      "args": [
+        "<HOME>/.codex/mcp/mcp-deepseek-bridge/index.mjs"
+      ],
+      "env": {
+        "DEEPSEEK_API_KEY_FILE": "<HOME>/.codex/.sandbox-secrets/deepseek_api_key.txt",
+        "DEEPSEEK_BASE_URL": "https://api.deepseek.com"
+      }
+    }
+  }
+}

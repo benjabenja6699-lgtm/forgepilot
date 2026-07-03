@@ -4,21 +4,23 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import threading
 import tkinter as tk
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+from typing import Callable
 
 
 APP_DIR = Path(__file__).resolve().parent
-REPO_ROOT = APP_DIR.parent.parent
-KIT_DIR = REPO_ROOT / "docs" / "ai_rules_kit"
-AGENTS_TEMPLATE = KIT_DIR / "templates" / "AGENTS.md"
-HOOK_TEMPLATE = KIT_DIR / "templates" / "pre-commit.sh.example"
-CODEX_CONFIG_TEMPLATE = KIT_DIR / "templates" / "codex.config.example.toml"
-MCP_TEMPLATE = KIT_DIR / "templates" / "mcp.json.example"
+BASE_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR))
+ASSET_DIR = BASE_DIR / "assets"
+AGENTS_TEMPLATE = ASSET_DIR / "AGENTS.md"
+HOOK_TEMPLATE = ASSET_DIR / "pre-commit.sh.example"
+CODEX_CONFIG_TEMPLATE = ASSET_DIR / "codex.config.example.toml"
+MCP_TEMPLATE = ASSET_DIR / "mcp.json.example"
 LOCAL_CAVEMAN_SOURCES = [
     Path.home() / ".agents" / "skills" / "caveman",
     Path.home() / ".codex" / "skills" / "caveman",
@@ -29,8 +31,9 @@ LOCAL_CAVEMAN_SOURCES = [
 class ActionSpec:
     key: str
     label: str
-    runner: callable
+    runner: Callable[[Path, Callable[[str], None], bool], None]
     default: bool = True
+    group: str = "General"
 
 
 @dataclass(frozen=True)
@@ -43,16 +46,16 @@ class ToolInfo:
 
 
 TOOL_CATALOG: list[ToolInfo] = [
-    ToolInfo("Git", "Base Dev", "Version control.", "Core VCS. Needed for repos, hooks, commits, and clone workflows."),
-    ToolInfo("GitHub CLI", "Base Dev", "GitHub in terminal.", "Used for auth, repo create, releases, PRs, issues, and automation."),
-    ToolInfo("Python", "Base Dev", "Interpreter + scripting.", "Needed for launcher scripts, utilities, and cross-platform helpers."),
-    ToolInfo("Node.js", "Base Dev", "JS runtime.", "Needed for npm-based CLIs and many agent toolchains."),
-    ToolInfo("ripgrep", "Base Dev", "Fast text search.", "Very fast code search. Better than grep for large repos."),
-    ToolInfo("jq", "Base Dev", "JSON filter.", "Terminal JSON inspection and scripting."),
-    ToolInfo("fzf", "Base Dev", "Interactive picker.", "Fuzzy selector for files, commands, and search results."),
-    ToolInfo("direnv", "Base Dev", "Per-folder env.", "Loads environment variables when entering a project folder."),
-    ToolInfo("mise", "Base Dev", "Tool version manager.", "Manages language/runtime versions and project toolchains."),
-    ToolInfo("Graphify", "Agents", "Codebase map.", "Builds a graph of code relationships so analysis can start from structure."),
+    ToolInfo("Git", "CLI base", "Version control.", "Core VCS for repos, commits, hooks, and clone workflows."),
+    ToolInfo("GitHub CLI", "CLI base", "GitHub in terminal.", "Auth, repo create, releases, PRs, issues, and automation."),
+    ToolInfo("Python", "CLI base", "Interpreter + scripting.", "Needed for the launcher, utilities, and cross-platform helpers."),
+    ToolInfo("Node.js", "CLI base", "JS runtime.", "Needed for npm-based CLIs and many agent toolchains."),
+    ToolInfo("ripgrep", "CLI base", "Fast text search.", "Faster search tool for large repos."),
+    ToolInfo("jq", "CLI base", "JSON filter.", "Terminal JSON inspection and scripting."),
+    ToolInfo("fzf", "CLI base", "Interactive picker.", "Fuzzy selector for files, commands, and search results."),
+    ToolInfo("direnv", "CLI base", "Per-folder env.", "Loads environment variables when entering a project folder."),
+    ToolInfo("uv", "CLI base", "Python tool runner.", "Fast Python package and tool installer."),
+    ToolInfo("Graphify", "Automation", "Codebase map.", "Builds a graph of code relationships so analysis can start from structure."),
     ToolInfo("Codex CLI", "Agents", "OpenAI terminal agent.", "OpenAI terminal workflow for coding and agentic tasks.", "https://developers.openai.com/codex/cli"),
     ToolInfo("Claude Code", "Agents", "Anthropic terminal agent.", "Terminal coding agent for analysis, edits, and repo work.", "https://docs.anthropic.com/en/docs/claude-code/overview"),
     ToolInfo("Gemini CLI", "Agents", "Google terminal agent.", "Terminal agent for Google-backed workflows and custom commands.", "https://github.com/google-gemini/gemini-cli"),
@@ -63,18 +66,7 @@ TOOL_CATALOG: list[ToolInfo] = [
 ]
 
 
-def shell_runner(command: str, windows: bool) -> callable:
-    def _run(repo: Path, log, dry_run: bool) -> None:
-        if windows:
-            cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command]
-        else:
-            cmd = ["bash", "-lc", command]
-        run_command(cmd, repo, log, dry_run)
-
-    return _run
-
-
-def run_command(command: list[str], cwd: Path | None, log, dry_run: bool) -> None:
+def run_command(command: list[str], cwd: Path | None, log, dry_run: bool = False) -> None:
     log(f"$ {' '.join(command)}")
     if dry_run:
         return
@@ -99,17 +91,23 @@ def open_path(path: Path) -> None:
     subprocess.Popen(["xdg-open", str(path)])
 
 
-def copy_file(src: Path, dst: Path, log) -> None:
+def copy_file(src: Path, dst: Path, log, dry_run: bool = False) -> None:
     if not src.exists():
         raise FileNotFoundError(f"Missing source: {src}")
     dst.parent.mkdir(parents=True, exist_ok=True)
+    if dry_run:
+        log(f"$ copy {src} -> {dst}")
+        return
     shutil.copy2(src, dst)
     log(f"Copied {src} -> {dst}")
 
 
-def copy_tree(src: Path, dst: Path, log) -> None:
+def copy_tree(src: Path, dst: Path, log, dry_run: bool = False) -> None:
     if not src.exists():
         raise FileNotFoundError(f"Missing source: {src}")
+    if dry_run:
+        log(f"$ copytree {src} -> {dst}")
+        return
     dst.mkdir(parents=True, exist_ok=True)
     for item in src.iterdir():
         target = dst / item.name
@@ -120,13 +118,36 @@ def copy_tree(src: Path, dst: Path, log) -> None:
     log(f"Copied {src} -> {dst}")
 
 
+def install_via_winget(package_id: str, repo: Path, log, dry_run: bool) -> None:
+    run_command(["winget", "install", "--id", package_id, "-e"], repo, log, dry_run)
+
+
 def install_graphify(repo: Path, log, dry_run: bool) -> None:
-    run_command(["uv", "tool", "install", "graphifyy"], repo, log, dry_run)
+    run_command(["uv", "tool", "install", "graphify"], repo, log, dry_run)
     run_command(["graphify", "install", "--platform", "codex"], repo, log, dry_run)
 
 
+def install_caveman(log, dry_run: bool = False) -> None:
+    source = next((p for p in LOCAL_CAVEMAN_SOURCES if p.exists()), None)
+    if source is None:
+        raise FileNotFoundError(
+            "No caveman skill source found in ~/.agents/skills/caveman or ~/.codex/skills/caveman"
+        )
+
+    for target in [
+        Path.home() / ".agents" / "skills" / "caveman",
+        Path.home() / ".codex" / "skills" / "caveman",
+    ]:
+        copy_tree(source, target, log, dry_run=dry_run)
+
+
 def install_claude_windows(repo: Path, log, dry_run: bool) -> None:
-    run_command(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex"], repo, log, dry_run)
+    run_command(
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex"],
+        repo,
+        log,
+        dry_run,
+    )
 
 
 def install_claude_linux(repo: Path, log, dry_run: bool) -> None:
@@ -142,15 +163,16 @@ def install_gemini(repo: Path, log, dry_run: bool) -> None:
 
 
 def install_uv_windows(repo: Path, log, dry_run: bool) -> None:
-    run_command(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", 'irm https://astral.sh/uv/install.ps1 | iex'], repo, log, dry_run)
+    run_command(
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "irm https://astral.sh/uv/install.ps1 | iex"],
+        repo,
+        log,
+        dry_run,
+    )
 
 
 def install_uv_linux(repo: Path, log, dry_run: bool) -> None:
     run_command(["bash", "-lc", "curl -LsSf https://astral.sh/uv/install.sh | sh"], repo, log, dry_run)
-
-
-def install_via_winget(package_id: str, repo: Path, log, dry_run: bool) -> None:
-    run_command(["winget", "install", "--id", package_id, "-e"], repo, log, dry_run)
 
 
 def install_base_dev_windows(repo: Path, log, dry_run: bool) -> None:
@@ -185,44 +207,19 @@ fi
     run_command(["bash", "-lc", script], repo, log, dry_run)
 
 
-def install_caveman(repo: Path, log, dry_run: bool) -> None:
-    source = next((p for p in LOCAL_CAVEMAN_SOURCES if p.exists()), None)
-    if source is None:
-        raise FileNotFoundError(
-            "No caveman skill source found in ~/.agents/skills/caveman or ~/.codex/skills/caveman"
-        )
-    for target in [Path.home() / ".agents" / "skills" / "caveman", Path.home() / ".codex" / "skills" / "caveman"]:
-        if dry_run:
-            log(f"$ copy {source} -> {target}")
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            copy_tree(source, target, log)
-
-
-def install_ai_rules_kit(repo: Path, log, dry_run: bool) -> None:
-    target = repo / "docs" / "ai_rules_kit"
-    if dry_run:
-        log(f"$ copy {KIT_DIR} -> {target}")
-        return
-    copy_tree(KIT_DIR, target, log)
-
-
 def install_agents(repo: Path, log, dry_run: bool) -> None:
-    target = repo / "AGENTS.md"
-    if dry_run:
-        log(f"$ copy {AGENTS_TEMPLATE} -> {target}")
-        return
-    copy_file(AGENTS_TEMPLATE, target, log)
+    copy_file(AGENTS_TEMPLATE, repo / "AGENTS.md", log, dry_run=dry_run)
 
 
 def install_hook(repo: Path, log, dry_run: bool) -> None:
     hook_target = repo / ".githooks" / "pre-commit"
+    copy_file(HOOK_TEMPLATE, hook_target, log, dry_run=dry_run)
     if dry_run:
-        log(f"$ copy {HOOK_TEMPLATE} -> {hook_target}")
-        log(f"$ git -C {repo} config core.hooksPath .githooks")
         return
-    copy_file(HOOK_TEMPLATE, hook_target, log)
-    run_command(["git", "-C", str(repo), "config", "core.hooksPath", ".githooks"], repo, log, dry_run)
+    git = shutil.which("git")
+    if not git:
+        raise FileNotFoundError("git not found in PATH")
+    run_command(["git", "-C", str(repo), "config", "core.hooksPath", ".githooks"], repo, log)
 
 
 def set_git_identity(repo: Path, name: str, email: str, log, dry_run: bool) -> None:
@@ -232,37 +229,55 @@ def set_git_identity(repo: Path, name: str, email: str, log, dry_run: bool) -> N
     run_command(["git", "-C", str(repo), "config", "user.email", email], repo, log, dry_run)
 
 
+def build_graph(repo: Path, log, dry_run: bool) -> None:
+    run_command(["graphify", "."], repo, log, dry_run)
+
+
 class ActionPanel(ttk.Frame):
     def __init__(
         self,
         parent,
         title: str,
+        description: str,
         actions: list[ActionSpec],
         repo_var: tk.StringVar,
         log_fn,
         dry_run_var: tk.BooleanVar,
         auto_open_var: tk.BooleanVar,
     ) -> None:
-        super().__init__(parent, padding=12)
+        super().__init__(parent, padding=14)
         self.repo_var = repo_var
         self.log = log_fn
         self.dry_run_var = dry_run_var
         self.auto_open_var = auto_open_var
         self.action_vars: dict[str, tk.BooleanVar] = {}
 
-        header = ttk.Label(self, text=title, font=("Segoe UI", 13, "bold"))
-        header.pack(anchor="w", pady=(0, 8))
+        ttk.Label(self, text=title, style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(self, text=description, style="Muted.TLabel", wraplength=960, justify="left").pack(anchor="w", pady=(0, 12))
 
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
 
-        for idx, action in enumerate(actions):
-            var = tk.BooleanVar(value=action.default)
-            self.action_vars[action.key] = var
-            ttk.Checkbutton(body, text=action.label, variable=var).grid(row=idx, column=0, sticky="w", padx=4, pady=4)
+        groups: dict[str, list[ActionSpec]] = {}
+        order: list[str] = []
+        for action in actions:
+            if action.group not in groups:
+                groups[action.group] = []
+                order.append(action.group)
+            groups[action.group].append(action)
+
+        for group_name in order:
+            group_box = ttk.Labelframe(body, text=group_name, padding=12)
+            group_box.pack(fill="x", expand=False, pady=(0, 10))
+            for action in groups[group_name]:
+                var = tk.BooleanVar(value=action.default)
+                self.action_vars[action.key] = var
+                row = ttk.Frame(group_box)
+                row.pack(fill="x", anchor="w", pady=4)
+                ttk.Checkbutton(row, text=action.label, variable=var).pack(anchor="w")
 
         buttons = ttk.Frame(self)
-        buttons.pack(fill="x", pady=(10, 0))
+        buttons.pack(fill="x", pady=(8, 0))
         ttk.Button(buttons, text="Run selected", command=lambda: self._run(actions)).pack(side="left")
         ttk.Button(buttons, text="Select all", command=lambda: self._set_all(True)).pack(side="left", padx=6)
         ttk.Button(buttons, text="Clear all", command=lambda: self._set_all(False)).pack(side="left")
@@ -292,7 +307,7 @@ class ActionPanel(ttk.Frame):
                     self.log(f"Running: {action.label}")
                     action.runner(repo, self.log, dry_run)
                 self.log("Done.")
-                if self.auto_open_var.get():
+                if self.auto_open_var.get() and not dry_run:
                     open_path(repo)
                 messagebox.showinfo("Done", "Selected actions finished.")
             except Exception as exc:  # noqa: BLE001
@@ -304,12 +319,16 @@ class ActionPanel(ttk.Frame):
 
 class ToolsPanel(ttk.Frame):
     def __init__(self, parent, log_fn) -> None:
-        super().__init__(parent, padding=12)
+        super().__init__(parent, padding=14)
         self.log = log_fn
         self.current_tool: ToolInfo | None = None
 
-        header = ttk.Label(self, text="Tools", font=("Segoe UI", 13, "bold"))
-        header.pack(anchor="w", pady=(0, 8))
+        ttk.Label(self, text="Herramientas", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(
+            self,
+            text="Lista resumida de CLIs, automatizacion y proveedores usados por el launcher.",
+            style="Muted.TLabel",
+        ).pack(anchor="w", pady=(0, 12))
 
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
@@ -319,16 +338,16 @@ class ToolsPanel(ttk.Frame):
         right = ttk.Frame(body)
         right.pack(side="left", fill="both", expand=True)
 
-        ttk.Label(left, text="Select a tool").pack(anchor="w")
-        self.listbox = tk.Listbox(left, width=28, height=22)
-        self.listbox.pack(fill="y", expand=False, pady=(4, 0))
+        ttk.Label(left, text="Selecciona una herramienta", style="Section.TLabel").pack(anchor="w")
+        self.listbox = tk.Listbox(left, width=30, height=22)
+        self.listbox.pack(fill="y", expand=False, pady=(6, 0))
         self.listbox.bind("<<ListboxSelect>>", self._on_select)
         for tool in TOOL_CATALOG:
             self.listbox.insert("end", tool.name)
 
-        self.tool_title = ttk.Label(right, text="Tool details", font=("Segoe UI", 12, "bold"))
+        self.tool_title = ttk.Label(right, text="Detalle de la herramienta", style="Section.TLabel")
         self.tool_title.pack(anchor="w")
-        self.tool_summary = ttk.Label(right, text="", wraplength=560, justify="left")
+        self.tool_summary = ttk.Label(right, text="", wraplength=560, justify="left", style="Muted.TLabel")
         self.tool_summary.pack(anchor="w", pady=(4, 8))
         self.tool_detail = tk.Text(right, height=14, wrap="word")
         self.tool_detail.pack(fill="both", expand=True)
@@ -339,6 +358,26 @@ class ToolsPanel(ttk.Frame):
         self.docs_button = ttk.Button(buttons, text="Open docs", command=self._open_docs)
         self.docs_button.pack(side="left")
 
+        self.listbox.configure(
+            bg="#120f0d",
+            fg="#f2e7d5",
+            selectbackground="#f5b84b",
+            selectforeground="#14110f",
+            highlightthickness=1,
+            highlightbackground="#4a392d",
+            relief="flat",
+            font=("Consolas", 10),
+        )
+        self.tool_detail.configure(
+            bg="#120f0d",
+            fg="#f2e7d5",
+            insertbackground="#f2e7d5",
+            highlightthickness=1,
+            highlightbackground="#4a392d",
+            relief="flat",
+            font=("Consolas", 10),
+        )
+
         self.listbox.selection_set(0)
         self._show_tool(TOOL_CATALOG[0])
 
@@ -346,8 +385,7 @@ class ToolsPanel(ttk.Frame):
         selection = self.listbox.curselection()
         if not selection:
             return
-        tool = TOOL_CATALOG[selection[0]]
-        self._show_tool(tool)
+        self._show_tool(TOOL_CATALOG[selection[0]])
 
     def _show_tool(self, tool: ToolInfo) -> None:
         self.current_tool = tool
@@ -367,36 +405,23 @@ class ToolsPanel(ttk.Frame):
             webbrowser.open(self.current_tool.docs_url)
 
 
-def build_windows_configs(repo_var, log_fn, dry_run_var, git_name_var, git_email_var) -> ActionPanel:
-    actions = [
-        ActionSpec("kit", "Copy ai_rules_kit into repo", lambda repo, log, dry_run: install_ai_rules_kit(repo, log, dry_run)),
-        ActionSpec("agents", "Install AGENTS.md", lambda repo, log, dry_run: install_agents(repo, log, dry_run)),
-        ActionSpec("hook", "Install git hook and hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run)),
-        ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, git_name_var.get().strip(), git_email_var.get().strip(), log, dry_run)),
-        ActionSpec("codex-config", "Copy Codex config template", lambda repo, log, dry_run: copy_file(CODEX_CONFIG_TEMPLATE, repo / ".codex" / "config.toml", log) if not dry_run else log(f"$ copy {CODEX_CONFIG_TEMPLATE} -> {repo / '.codex/config.toml'}")),
-        ActionSpec("mcp", "Copy MCP config template", lambda repo, log, dry_run: copy_file(MCP_TEMPLATE, repo / "mcp.json", log) if not dry_run else log(f"$ copy {MCP_TEMPLATE} -> {repo / 'mcp.json'}")),
-    ]
-    return ActionPanel(None, "Windows configurations", actions, repo_var, log_fn, dry_run_var)
-
-
-def build_linux_configs(repo_var, log_fn, dry_run_var, git_name_var, git_email_var) -> ActionPanel:
-    actions = [
-        ActionSpec("kit", "Copy ai_rules_kit into repo", lambda repo, log, dry_run: install_ai_rules_kit(repo, log, dry_run)),
-        ActionSpec("agents", "Install AGENTS.md", lambda repo, log, dry_run: install_agents(repo, log, dry_run)),
-        ActionSpec("hook", "Install git hook and hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run)),
-        ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, git_name_var.get().strip(), git_email_var.get().strip(), log, dry_run)),
-        ActionSpec("codex-config", "Copy Codex config template", lambda repo, log, dry_run: copy_file(CODEX_CONFIG_TEMPLATE, repo / ".codex" / "config.toml", log) if not dry_run else log(f"$ copy {CODEX_CONFIG_TEMPLATE} -> {repo / '.codex/config.toml'}")),
-        ActionSpec("mcp", "Copy MCP config template", lambda repo, log, dry_run: copy_file(MCP_TEMPLATE, repo / "mcp.json", log) if not dry_run else log(f"$ copy {MCP_TEMPLATE} -> {repo / 'mcp.json'}")),
-    ]
-    return ActionPanel(None, "Linux configurations", actions, repo_var, log_fn, dry_run_var)
-
-
 class LauncherApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("ForgePilot Suite")
-        self.geometry("1100x760")
-        self.minsize(980, 680)
+        self.title("ForgePilot Launcher")
+        self.geometry("1200x840")
+        self.minsize(1060, 740)
+
+        self.palette = {
+            "bg": "#14110f",
+            "panel": "#1d1814",
+            "panel_2": "#251f1a",
+            "text": "#f2e7d5",
+            "muted": "#c8b79d",
+            "accent": "#f5b84b",
+            "accent_2": "#ff8f5a",
+            "entry": "#120f0d",
+        }
 
         self.repo_var = tk.StringVar(value=str(Path.cwd()))
         self.dry_run_var = tk.BooleanVar(value=False)
@@ -404,20 +429,69 @@ class LauncherApp(tk.Tk):
         self.git_name_var = tk.StringVar(value="")
         self.git_email_var = tk.StringVar(value="")
 
+        self._configure_style()
         self._build_ui()
 
+    def _configure_style(self) -> None:
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        self.configure(bg=self.palette["bg"])
+        style.configure("TFrame", background=self.palette["bg"])
+        style.configure("Card.TFrame", background=self.palette["panel"], relief="flat")
+        style.configure("Inner.TFrame", background=self.palette["panel_2"])
+        style.configure("TLabel", background=self.palette["bg"], foreground=self.palette["text"], font=("Segoe UI", 10))
+        style.configure("HeroTitle.TLabel", background=self.palette["bg"], foreground=self.palette["accent"], font=("Consolas", 18, "bold"))
+        style.configure("Section.TLabel", background=self.palette["bg"], foreground=self.palette["text"], font=("Segoe UI", 12, "bold"))
+        style.configure("Muted.TLabel", background=self.palette["bg"], foreground=self.palette["muted"], font=("Segoe UI", 9))
+        style.configure("TNotebook", background=self.palette["bg"], borderwidth=0)
+        style.configure(
+            "TNotebook.Tab",
+            background=self.palette["panel_2"],
+            foreground=self.palette["muted"],
+            padding=(14, 8),
+            font=("Segoe UI", 10, "bold"),
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", self.palette["accent"])],
+            foreground=[("selected", self.palette["bg"])],
+        )
+        style.configure("TButton", background=self.palette["panel_2"], foreground=self.palette["text"], padding=(12, 8), relief="flat")
+        style.map(
+            "TButton",
+            background=[("active", self.palette["accent_2"])],
+            foreground=[("active", self.palette["bg"])],
+        )
+        style.configure("TCheckbutton", background=self.palette["panel"], foreground=self.palette["text"], font=("Segoe UI", 10))
+        style.map("TCheckbutton", foreground=[("active", self.palette["accent"])])
+        style.configure("TLabelframe", background=self.palette["panel"], foreground=self.palette["accent"], borderwidth=1, relief="solid")
+        style.configure("TLabelframe.Label", background=self.palette["panel"], foreground=self.palette["accent"], font=("Segoe UI", 10, "bold"))
+        style.configure("TEntry", fieldbackground=self.palette["entry"], foreground=self.palette["text"], insertcolor=self.palette["text"])
+        style.configure("TScrollbar", background=self.palette["panel"], troughcolor=self.palette["bg"], arrowcolor=self.palette["text"])
+
     def _build_ui(self) -> None:
-        outer = ttk.Frame(self, padding=14)
+        outer = ttk.Frame(self, padding=18, style="Card.TFrame")
         outer.pack(fill="both", expand=True)
 
-        top = ttk.Frame(outer)
-        top.pack(fill="x", pady=(0, 10))
+        hero = ttk.Frame(outer, padding=(18, 16), style="Inner.TFrame")
+        hero.pack(fill="x", pady=(0, 14))
+        ttk.Label(hero, text="ForgePilot Launcher", style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            hero,
+            text="Panel retro portable para instalar CLIs, escribir reglas, configurar hooks y lanzar Graphify.",
+            style="Muted.TLabel",
+        ).pack(anchor="w", pady=(4, 0))
 
-        ttk.Label(top, text="Repo destino").pack(anchor="w")
+        top = ttk.Frame(outer, padding=(2, 0))
+        top.pack(fill="x", pady=(0, 12))
+        ttk.Label(top, text="Repo destino", style="Section.TLabel").pack(anchor="w")
         row = ttk.Frame(top)
         row.pack(fill="x", pady=(4, 0))
-        entry = ttk.Entry(row, textvariable=self.repo_var)
-        entry.pack(side="left", fill="x", expand=True)
+        ttk.Entry(row, textvariable=self.repo_var).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Browse", command=self._browse_repo).pack(side="left", padx=(8, 0))
 
         tabs = ttk.Notebook(outer)
@@ -430,9 +504,9 @@ class LauncherApp(tk.Tk):
         settings_tab = ttk.Frame(tabs)
         tabs.add(installers_tab, text="Instaladores")
         tabs.add(configs_tab, text="Configuraciones")
-        tabs.add(tools_tab, text="Tools")
+        tabs.add(tools_tab, text="Herramientas")
         tabs.add(logs_tab, text="Logs")
-        tabs.add(settings_tab, text="Settings")
+        tabs.add(settings_tab, text="Ajustes")
 
         install_nb = ttk.Notebook(installers_tab)
         install_nb.pack(fill="both", expand=True, padx=2, pady=2)
@@ -456,8 +530,17 @@ class LauncherApp(tk.Tk):
         scroll = ttk.Scrollbar(logs_tab, orient="vertical", command=self.log_text.yview)
         scroll.pack(side="right", fill="y")
         self.log_text.configure(yscrollcommand=scroll.set)
+        self.log_text.configure(
+            bg="#120f0d",
+            fg="#f2e7d5",
+            insertbackground="#f2e7d5",
+            highlightthickness=1,
+            highlightbackground="#4a392d",
+            relief="flat",
+            font=("Consolas", 10),
+        )
 
-        settings = ttk.Frame(settings_tab, padding=14)
+        settings = ttk.Frame(settings_tab, padding=14, style="Inner.TFrame")
         settings.pack(fill="both", expand=True)
         ttk.Checkbutton(settings, text="Dry run only", variable=self.dry_run_var).pack(anchor="w", pady=4)
         ttk.Checkbutton(settings, text="Open repo folder after successful run", variable=self.auto_open_var).pack(anchor="w", pady=4)
@@ -465,60 +548,113 @@ class LauncherApp(tk.Tk):
         ttk.Entry(settings, textvariable=self.git_name_var).pack(fill="x")
         ttk.Label(settings, text="Git user.email").pack(anchor="w", pady=(10, 2))
         ttk.Entry(settings, textvariable=self.git_email_var).pack(fill="x")
-        ttk.Button(settings, text="Open ForgePilot repo", command=lambda: webbrowser.open("https://github.com/benjabenja6699-lgtm/forgepilot")).pack(anchor="w", pady=(16, 0))
-        ttk.Button(settings, text="Open Codex docs", command=lambda: webbrowser.open("https://developers.openai.com/codex/cli")).pack(anchor="w", pady=(8, 0))
+        ttk.Button(
+            settings,
+            text="Open ForgePilot repo",
+            command=lambda: webbrowser.open("https://github.com/benjabenja6699-lgtm/forgepilot"),
+        ).pack(anchor="w", pady=(16, 0))
+        ttk.Button(
+            settings,
+            text="Open Codex docs",
+            command=lambda: webbrowser.open("https://developers.openai.com/codex/cli"),
+        ).pack(anchor="w", pady=(8, 0))
 
         self._log("Ready.")
 
-        windows_install_panel = ActionPanel(win_install, "Windows installers", self._windows_install_actions(), self.repo_var, self._log, self.dry_run_var, self.auto_open_var)
+        windows_install_panel = ActionPanel(
+            win_install,
+            "Windows installers",
+            "Instala los componentes mas usados en Windows. El grupo CLI base agrupa las herramientas que casi siempre hacen falta, mientras que Agents y Automation cubren los CLIs de trabajo y Graphify.",
+            self._windows_install_actions(),
+            self.repo_var,
+            self._log,
+            self.dry_run_var,
+            self.auto_open_var,
+        )
         windows_install_panel.pack(fill="both", expand=True)
-        linux_install_panel = ActionPanel(lin_install, "Linux installers", self._linux_install_actions(), self.repo_var, self._log, self.dry_run_var, self.auto_open_var)
+
+        linux_install_panel = ActionPanel(
+            lin_install,
+            "Linux installers",
+            "Instaladores equivalentes para Linux. El grupo CLI base usa el gestor local cuando puede, y los CLIs de agentes se instalan con sus comandos oficiales.",
+            self._linux_install_actions(),
+            self.repo_var,
+            self._log,
+            self.dry_run_var,
+            self.auto_open_var,
+        )
         linux_install_panel.pack(fill="both", expand=True)
 
-        windows_config_panel = ActionPanel(win_config, "Windows configurations", self._windows_config_actions(), self.repo_var, self._log, self.dry_run_var, self.auto_open_var)
+        windows_config_panel = ActionPanel(
+            win_config,
+            "Windows configurations",
+            "Escribe los archivos de configuracion que este launcher genera en cualquier proyecto: AGENTS.md, Codex config, MCP y hook de git.",
+            self._windows_config_actions(),
+            self.repo_var,
+            self._log,
+            self.dry_run_var,
+            self.auto_open_var,
+        )
         windows_config_panel.pack(fill="both", expand=True)
-        linux_config_panel = ActionPanel(lin_config, "Linux configurations", self._linux_config_actions(), self.repo_var, self._log, self.dry_run_var, self.auto_open_var)
+
+        linux_config_panel = ActionPanel(
+            lin_config,
+            "Linux configurations",
+            "Mismo flujo de configuracion, pero respetando la ruta y el comportamiento tipico de Linux.",
+            self._linux_config_actions(),
+            self.repo_var,
+            self._log,
+            self.dry_run_var,
+            self.auto_open_var,
+        )
         linux_config_panel.pack(fill="both", expand=True)
 
     def _windows_install_actions(self) -> list[ActionSpec]:
         return [
-            ActionSpec("base-dev", "Base Dev tools", lambda repo, log, dry_run: install_base_dev_windows(repo, log, dry_run)),
-            ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run)),
-            ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_windows(repo, log, dry_run)),
-            ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run)),
-            ActionSpec("uv", "uv", lambda repo, log, dry_run: install_uv_windows(repo, log, dry_run)),
-            ActionSpec("caveman", "Caveman skill import", lambda repo, log, dry_run: install_caveman(repo, log, dry_run)),
+            ActionSpec("git", "Git", lambda repo, log, dry_run: install_via_winget("Git.Git", repo, log, dry_run), group="CLI base"),
+            ActionSpec("gh", "GitHub CLI", lambda repo, log, dry_run: install_via_winget("GitHub.cli", repo, log, dry_run), group="CLI base"),
+            ActionSpec("python", "Python", lambda repo, log, dry_run: install_via_winget("Python.Python.3.13", repo, log, dry_run), group="CLI base"),
+            ActionSpec("node", "Node.js", lambda repo, log, dry_run: install_via_winget("OpenJS.NodeJS.LTS", repo, log, dry_run), group="CLI base"),
+            ActionSpec("rg", "ripgrep", lambda repo, log, dry_run: install_via_winget("BurntSushi.ripgrep.MSVC", repo, log, dry_run), group="CLI base"),
+            ActionSpec("jq", "jq", lambda repo, log, dry_run: install_via_winget("jqlang.jq", repo, log, dry_run), group="CLI base"),
+            ActionSpec("fzf", "fzf", lambda repo, log, dry_run: install_via_winget("junegunn.fzf", repo, log, dry_run), group="CLI base"),
+            ActionSpec("direnv", "direnv", lambda repo, log, dry_run: install_via_winget("direnv.direnv", repo, log, dry_run), group="CLI base"),
+            ActionSpec("uv", "uv", lambda repo, log, dry_run: install_uv_windows(repo, log, dry_run), group="CLI base"),
+            ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run), group="Automation"),
+            ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_windows(repo, log, dry_run), group="Agents"),
+            ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run), group="Agents"),
+            ActionSpec("caveman", "Caveman skill import", lambda repo, log, dry_run: install_caveman(log, dry_run), group="Automation"),
         ]
 
     def _linux_install_actions(self) -> list[ActionSpec]:
         return [
-            ActionSpec("base-dev", "Base Dev tools", lambda repo, log, dry_run: install_base_dev_linux(repo, log, dry_run)),
-            ActionSpec("codex", "Codex CLI", lambda repo, log, dry_run: install_codex_linux(repo, log, dry_run)),
-            ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_linux(repo, log, dry_run)),
-            ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run)),
-            ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run)),
-            ActionSpec("uv", "uv", lambda repo, log, dry_run: install_uv_linux(repo, log, dry_run)),
-            ActionSpec("caveman", "Caveman skill import", lambda repo, log, dry_run: install_caveman(repo, log, dry_run)),
+            ActionSpec("base-dev", "CLI base (Git, GitHub CLI, Python, Node, etc.)", lambda repo, log, dry_run: install_base_dev_linux(repo, log, dry_run), group="CLI base"),
+            ActionSpec("uv", "uv", lambda repo, log, dry_run: install_uv_linux(repo, log, dry_run), group="CLI base"),
+            ActionSpec("codex", "Codex CLI", lambda repo, log, dry_run: install_codex_linux(repo, log, dry_run), group="Agents"),
+            ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_linux(repo, log, dry_run), group="Agents"),
+            ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run), group="Agents"),
+            ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run), group="Automation"),
+            ActionSpec("caveman", "Caveman skill import", lambda repo, log, dry_run: install_caveman(log, dry_run), group="Automation"),
         ]
 
     def _windows_config_actions(self) -> list[ActionSpec]:
         return [
-            ActionSpec("kit", "Copy ai_rules_kit into repo", lambda repo, log, dry_run: install_ai_rules_kit(repo, log, dry_run)),
-            ActionSpec("agents", "Install AGENTS.md", lambda repo, log, dry_run: copy_file(AGENTS_TEMPLATE, repo / "AGENTS.md", log) if not dry_run else log(f"$ copy {AGENTS_TEMPLATE} -> {repo / 'AGENTS.md'}")),
-            ActionSpec("hook", "Install git hook and hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run)),
-            ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, self.git_name_var.get().strip(), self.git_email_var.get().strip(), log, dry_run)),
-            ActionSpec("codex-config", "Copy Codex config template", lambda repo, log, dry_run: copy_file(CODEX_CONFIG_TEMPLATE, repo / ".codex" / "config.toml", log) if not dry_run else log(f"$ copy {CODEX_CONFIG_TEMPLATE} -> {repo / '.codex/config.toml'}")),
-            ActionSpec("mcp", "Copy MCP config template", lambda repo, log, dry_run: copy_file(MCP_TEMPLATE, repo / "mcp.json", log) if not dry_run else log(f"$ copy {MCP_TEMPLATE} -> {repo / 'mcp.json'}")),
+            ActionSpec("agents", "Write AGENTS.md", lambda repo, log, dry_run: copy_file(AGENTS_TEMPLATE, repo / "AGENTS.md", log, dry_run), group="Project files"),
+            ActionSpec("codex-config", "Write .codex/config.toml", lambda repo, log, dry_run: copy_file(CODEX_CONFIG_TEMPLATE, repo / ".codex" / "config.toml", log, dry_run), group="Project files"),
+            ActionSpec("mcp", "Write mcp.json", lambda repo, log, dry_run: copy_file(MCP_TEMPLATE, repo / "mcp.json", log, dry_run), group="Project files"),
+            ActionSpec("hook", "Write git hook + hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run), group="Git"),
+            ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, self.git_name_var.get().strip(), self.git_email_var.get().strip(), log, dry_run), group="Git"),
+            ActionSpec("graphify", "Run Graphify on repo", lambda repo, log, dry_run: build_graph(repo, log, dry_run), default=False, group="Automation"),
         ]
 
     def _linux_config_actions(self) -> list[ActionSpec]:
         return [
-            ActionSpec("kit", "Copy ai_rules_kit into repo", lambda repo, log, dry_run: install_ai_rules_kit(repo, log, dry_run)),
-            ActionSpec("agents", "Install AGENTS.md", lambda repo, log, dry_run: copy_file(AGENTS_TEMPLATE, repo / "AGENTS.md", log) if not dry_run else log(f"$ copy {AGENTS_TEMPLATE} -> {repo / 'AGENTS.md'}")),
-            ActionSpec("hook", "Install git hook and hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run)),
-            ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, self.git_name_var.get().strip(), self.git_email_var.get().strip(), log, dry_run)),
-            ActionSpec("codex-config", "Copy Codex config template", lambda repo, log, dry_run: copy_file(CODEX_CONFIG_TEMPLATE, repo / ".codex" / "config.toml", log) if not dry_run else log(f"$ copy {CODEX_CONFIG_TEMPLATE} -> {repo / '.codex/config.toml'}")),
-            ActionSpec("mcp", "Copy MCP config template", lambda repo, log, dry_run: copy_file(MCP_TEMPLATE, repo / "mcp.json", log) if not dry_run else log(f"$ copy {MCP_TEMPLATE} -> {repo / 'mcp.json'}")),
+            ActionSpec("agents", "Write AGENTS.md", lambda repo, log, dry_run: copy_file(AGENTS_TEMPLATE, repo / "AGENTS.md", log, dry_run), group="Project files"),
+            ActionSpec("codex-config", "Write .codex/config.toml", lambda repo, log, dry_run: copy_file(CODEX_CONFIG_TEMPLATE, repo / ".codex" / "config.toml", log, dry_run), group="Project files"),
+            ActionSpec("mcp", "Write mcp.json", lambda repo, log, dry_run: copy_file(MCP_TEMPLATE, repo / "mcp.json", log, dry_run), group="Project files"),
+            ActionSpec("hook", "Write git hook + hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run), group="Git"),
+            ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, self.git_name_var.get().strip(), self.git_email_var.get().strip(), log, dry_run), group="Git"),
+            ActionSpec("graphify", "Run Graphify on repo", lambda repo, log, dry_run: build_graph(repo, log, dry_run), default=False, group="Automation"),
         ]
 
     def _log(self, text: str) -> None:

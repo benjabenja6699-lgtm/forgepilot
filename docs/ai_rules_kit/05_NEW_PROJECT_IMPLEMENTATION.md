@@ -31,7 +31,7 @@ En `~/.codex/config.toml`:
 ## Paso 4: instalar Graphify
 
 ```powershell
-uv tool install graphifyy
+uv tool install graphify
 graphify install --platform codex
 ```
 

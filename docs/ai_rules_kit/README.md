@@ -43,9 +43,8 @@ El anti-patron que gasta tokens es:
 
 ## Archivo persistente del repo actual
 
-La regla operativa activa vive en:
-
-- `AGENTS.md` en la raiz del proyecto destino
+La regla operativa activa de cada repo destino vive en su propio `AGENTS.md`.
+Este kit solo trae el template para copiarlo al repo que vayas a trabajar.
 
 ## Uso recomendado
 
