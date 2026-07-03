@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -13,6 +14,7 @@ if str(ROOT) not in sys.path:
 
 from launcher_core.actions import build_linux_config_actions, build_linux_install_actions, build_windows_config_actions, build_windows_install_actions
 from launcher_core.catalog import TOOL_CATALOG
+from launcher_core.prereqs import missing_prerequisites
 from launcher_core.theme import PALETTE
 import workflow_launcher
 
@@ -32,6 +34,7 @@ class LauncherCoreTests(unittest.TestCase):
         actions = build_windows_install_actions()
         keys = [action.key for action in actions]
         self.assertEqual(len(keys), len(set(keys)))
+        self.assertIn("base-dev", keys)
         self.assertIn("graphify", keys)
         self.assertIn("caveman", keys)
 
@@ -64,6 +67,16 @@ class LauncherCoreTests(unittest.TestCase):
 
     def test_entrypoint_exports_main(self) -> None:
         self.assertTrue(callable(workflow_launcher.main))
+
+    def test_missing_prerequisites_reports_command_and_action(self) -> None:
+        actions = build_windows_install_actions()
+        selected = [next(action for action in actions if action.key == "base-dev")]
+
+        with mock.patch("launcher_core.prereqs.shutil.which", return_value=None):
+            missing = missing_prerequisites(selected)
+
+        self.assertIn("winget", missing)
+        self.assertIn("Base Dev tools", missing["winget"])
 
 
 if __name__ == "__main__":

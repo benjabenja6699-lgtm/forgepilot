@@ -8,6 +8,7 @@ from tkinter import messagebox, ttk
 
 from .actions import ActionSpec, open_path
 from .catalog import TOOL_CATALOG, ToolInfo
+from .prereqs import missing_prerequisites
 
 
 class ActionPanel(ttk.Frame):
@@ -74,6 +75,17 @@ class ActionPanel(ttk.Frame):
         selected = [action for action in actions if self.action_vars[action.key].get()]
         if not selected:
             messagebox.showinfo("Nothing selected", "Choose at least one action.")
+            return
+
+        missing = missing_prerequisites(selected)
+        if missing:
+            lines = ["Missing prerequisites detected before running:"]
+            for command_name, labels in sorted(missing.items()):
+                labels_text = ", ".join(labels)
+                lines.append(f"- {command_name} needed by: {labels_text}")
+            message = "\n".join(lines)
+            self.log(message)
+            messagebox.showerror("Missing prerequisites", message)
             return
 
         dry_run = self.dry_run_var.get()

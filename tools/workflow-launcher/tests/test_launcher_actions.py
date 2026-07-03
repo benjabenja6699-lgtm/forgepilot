@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-from launcher_core.actions import copy_file, copy_tree, install_hook
+from launcher_core.actions import copy_file, copy_tree, install_base_dev_linux, install_base_dev_windows, install_hook
 
 
 class LauncherActionTests(unittest.TestCase):
@@ -75,6 +75,40 @@ class LauncherActionTests(unittest.TestCase):
 
             copy_mock.assert_called_once()
             run_mock.assert_not_called()
+
+    def test_install_base_dev_windows_runs_pack_and_uv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = Path(tmpdir)
+            logs: list[str] = []
+
+            with (
+                patch("launcher_core.actions.shutil.which", return_value="winget"),
+                patch("launcher_core.actions.install_via_winget") as winget_mock,
+                patch("launcher_core.actions.install_uv_windows") as uv_mock,
+            ):
+                install_base_dev_windows(repo, logs.append, False)
+
+            self.assertGreaterEqual(winget_mock.call_count, 8)
+            uv_mock.assert_called_once_with(repo, logs.append, False)
+
+    def test_install_base_dev_linux_includes_runtime_prereqs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = Path(tmpdir)
+            logs: list[str] = []
+
+            with (
+                patch("launcher_core.actions.run_command") as run_mock,
+                patch("launcher_core.actions.install_uv_linux") as uv_mock,
+            ):
+                install_base_dev_linux(repo, logs.append, False)
+
+            run_mock.assert_called_once()
+            command = run_mock.call_args.args[0]
+            script = command[2]
+            self.assertIn("python3-tk", script)
+            self.assertIn("curl", script)
+            self.assertIn("ca-certificates", script)
+            uv_mock.assert_called_once_with(repo, logs.append, False)
 
 
 if __name__ == "__main__":

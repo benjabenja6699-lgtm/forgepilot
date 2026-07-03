@@ -20,6 +20,7 @@ class ActionSpec:
     runner: Callable[[Path, Callable[[str], None], bool], None]
     default: bool = True
     group: str = "General"
+    requires: tuple[str, ...] = ()
 
 LOCAL_CAVEMAN_SOURCES = [
     Path.home() / ".agents" / "skills" / "caveman",
@@ -43,6 +44,12 @@ def run_command(command: list[str], cwd: Path | None, log, dry_run: bool = False
         log(output.rstrip())
     if proc.returncode != 0:
         raise RuntimeError(f"Command failed: {' '.join(command)}")
+
+
+def _require_command(command_name: str, purpose: str) -> None:
+    if shutil.which(command_name):
+        return
+    raise FileNotFoundError(f"{command_name} not found in PATH ({purpose})")
 
 
 def open_path(path: Path) -> None:
@@ -80,10 +87,12 @@ def copy_tree(src: Path, dst: Path, log, dry_run: bool = False) -> None:
 
 
 def install_via_winget(package_id: str, repo: Path, log, dry_run: bool) -> None:
+    _require_command("winget", f"needed to install {package_id}")
     run_command(["winget", "install", "--id", package_id, "-e"], repo, log, dry_run)
 
 
 def install_graphify(repo: Path, log, dry_run: bool) -> None:
+    _require_command("uv", "needed to install Graphify")
     run_command(["uv", "tool", "install", "graphify"], repo, log, dry_run)
     run_command(["graphify", "install", "--platform", "codex"], repo, log, dry_run)
 
@@ -112,14 +121,17 @@ def install_claude_windows(repo: Path, log, dry_run: bool) -> None:
 
 
 def install_claude_linux(repo: Path, log, dry_run: bool) -> None:
+    _require_command("curl", "needed to install Claude Code")
     run_command(["bash", "-lc", "curl -fsSL https://claude.ai/install.sh | bash"], repo, log, dry_run)
 
 
 def install_codex_linux(repo: Path, log, dry_run: bool) -> None:
+    _require_command("curl", "needed to install Codex CLI")
     run_command(["bash", "-lc", "curl -fsSL https://chatgpt.com/codex/install.sh | sh"], repo, log, dry_run)
 
 
 def install_gemini(repo: Path, log, dry_run: bool) -> None:
+    _require_command("npm", "needed to install Gemini CLI")
     run_command(["npm", "install", "-g", "@google/gemini-cli"], repo, log, dry_run)
 
 
@@ -133,10 +145,12 @@ def install_uv_windows(repo: Path, log, dry_run: bool) -> None:
 
 
 def install_uv_linux(repo: Path, log, dry_run: bool) -> None:
+    _require_command("curl", "needed to install uv")
     run_command(["bash", "-lc", "curl -LsSf https://astral.sh/uv/install.sh | sh"], repo, log, dry_run)
 
 
 def install_base_dev_windows(repo: Path, log, dry_run: bool) -> None:
+    _require_command("winget", "needed to install Windows base CLI tools")
     for package_id in [
         "Git.Git",
         "GitHub.cli",
@@ -148,6 +162,7 @@ def install_base_dev_windows(repo: Path, log, dry_run: bool) -> None:
         "direnv.direnv",
     ]:
         install_via_winget(package_id, repo, log, dry_run)
+    install_uv_windows(repo, log, dry_run)
 
 
 def install_base_dev_linux(repo: Path, log, dry_run: bool) -> None:
@@ -155,17 +170,18 @@ def install_base_dev_linux(repo: Path, log, dry_run: bool) -> None:
 set -e
 if command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update
-  sudo apt-get install -y git gh python3 python3-pip nodejs npm ripgrep jq fzf direnv
+  sudo apt-get install -y git gh python3 python3-pip python3-tk nodejs npm curl ca-certificates ripgrep jq fzf direnv
 elif command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y git gh python3 python3-pip nodejs npm ripgrep jq fzf direnv
+  sudo dnf install -y git gh python3 python3-pip python3-tkinter nodejs npm curl ca-certificates ripgrep jq fzf direnv
 elif command -v pacman >/dev/null 2>&1; then
-  sudo pacman -Sy --noconfirm git github-cli python nodejs npm ripgrep jq fzf direnv
+  sudo pacman -Sy --noconfirm git github-cli python python-pip tk nodejs npm curl ca-certificates ripgrep jq fzf direnv
 else
   echo "No supported package manager found."
   exit 1
 fi
 """
     run_command(["bash", "-lc", script], repo, log, dry_run)
+    install_uv_linux(repo, log, dry_run)
 
 
 def install_agents(repo: Path, log, dry_run: bool) -> None:
@@ -196,6 +212,7 @@ def build_graph(repo: Path, log, dry_run: bool) -> None:
 
 def build_windows_install_actions() -> list[ActionSpec]:
     return [
+        ActionSpec("base-dev", "Base Dev tools", lambda repo, log, dry_run: install_base_dev_windows(repo, log, dry_run), default=False, group="CLI base", requires=("winget",)),
         ActionSpec("git", "Git", lambda repo, log, dry_run: install_via_winget("Git.Git", repo, log, dry_run), group="CLI base"),
         ActionSpec("gh", "GitHub CLI", lambda repo, log, dry_run: install_via_winget("GitHub.cli", repo, log, dry_run), group="CLI base"),
         ActionSpec("python", "Python", lambda repo, log, dry_run: install_via_winget("Python.Python.3.13", repo, log, dry_run), group="CLI base"),
@@ -204,22 +221,22 @@ def build_windows_install_actions() -> list[ActionSpec]:
         ActionSpec("jq", "jq", lambda repo, log, dry_run: install_via_winget("jqlang.jq", repo, log, dry_run), group="CLI base"),
         ActionSpec("fzf", "fzf", lambda repo, log, dry_run: install_via_winget("junegunn.fzf", repo, log, dry_run), group="CLI base"),
         ActionSpec("direnv", "direnv", lambda repo, log, dry_run: install_via_winget("direnv.direnv", repo, log, dry_run), group="CLI base"),
-        ActionSpec("uv", "uv", lambda repo, log, dry_run: install_uv_windows(repo, log, dry_run), group="CLI base"),
-        ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run), group="Automation"),
-        ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_windows(repo, log, dry_run), group="Agents"),
-        ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run), group="Agents"),
+        ActionSpec("uv", "uv", lambda repo, log, dry_run: install_uv_windows(repo, log, dry_run), group="CLI base", requires=("powershell",)),
+        ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run), group="Automation", requires=("uv",)),
+        ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_windows(repo, log, dry_run), group="Agents", requires=("powershell",)),
+        ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run), group="Agents", requires=("npm",)),
         ActionSpec("caveman", "Caveman skill import", lambda repo, log, dry_run: install_caveman(log, dry_run), group="Automation"),
     ]
 
 
 def build_linux_install_actions() -> list[ActionSpec]:
     return [
-        ActionSpec("base-dev", "CLI base (Git, GitHub CLI, Python, Node, etc.)", lambda repo, log, dry_run: install_base_dev_linux(repo, log, dry_run), group="CLI base"),
-        ActionSpec("uv", "uv", lambda repo, log, dry_run: install_uv_linux(repo, log, dry_run), group="CLI base"),
-        ActionSpec("codex", "Codex CLI", lambda repo, log, dry_run: install_codex_linux(repo, log, dry_run), group="Agents"),
-        ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_linux(repo, log, dry_run), group="Agents"),
-        ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run), group="Agents"),
-        ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run), group="Automation"),
+        ActionSpec("base-dev", "CLI base (Git, GitHub CLI, Python, Node, etc.)", lambda repo, log, dry_run: install_base_dev_linux(repo, log, dry_run), group="CLI base", requires=("bash",)),
+        ActionSpec("uv", "uv", lambda repo, log, dry_run: install_uv_linux(repo, log, dry_run), group="CLI base", requires=("bash", "curl")),
+        ActionSpec("codex", "Codex CLI", lambda repo, log, dry_run: install_codex_linux(repo, log, dry_run), group="Agents", requires=("bash", "curl")),
+        ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_linux(repo, log, dry_run), group="Agents", requires=("bash", "curl")),
+        ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run), group="Agents", requires=("npm",)),
+        ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run), group="Automation", requires=("uv",)),
         ActionSpec("caveman", "Caveman skill import", lambda repo, log, dry_run: install_caveman(log, dry_run), group="Automation"),
     ]
 
@@ -229,9 +246,9 @@ def build_windows_config_actions(name_getter: Callable[[], str], email_getter: C
         ActionSpec("agents", "Write AGENTS.md", lambda repo, log, dry_run: copy_file(AGENTS_TEMPLATE, repo / "AGENTS.md", log, dry_run), group="Project files"),
         ActionSpec("codex-config", "Write .codex/config.toml", lambda repo, log, dry_run: copy_file(CODEX_CONFIG_TEMPLATE, repo / ".codex" / "config.toml", log, dry_run), group="Project files"),
         ActionSpec("mcp", "Write mcp.json", lambda repo, log, dry_run: copy_file(MCP_TEMPLATE, repo / "mcp.json", log, dry_run), group="Project files"),
-        ActionSpec("hook", "Write git hook + hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run), group="Git"),
-        ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, name_getter().strip(), email_getter().strip(), log, dry_run), group="Git"),
-        ActionSpec("graphify", "Run Graphify on repo", lambda repo, log, dry_run: build_graph(repo, log, dry_run), default=False, group="Automation"),
+        ActionSpec("hook", "Write git hook + hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run), group="Git", requires=("git",)),
+        ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, name_getter().strip(), email_getter().strip(), log, dry_run), group="Git", requires=("git",)),
+        ActionSpec("graphify", "Run Graphify on repo", lambda repo, log, dry_run: build_graph(repo, log, dry_run), default=False, group="Automation", requires=("graphify",)),
     ]
 
 
@@ -240,7 +257,7 @@ def build_linux_config_actions(name_getter: Callable[[], str], email_getter: Cal
         ActionSpec("agents", "Write AGENTS.md", lambda repo, log, dry_run: copy_file(AGENTS_TEMPLATE, repo / "AGENTS.md", log, dry_run), group="Project files"),
         ActionSpec("codex-config", "Write .codex/config.toml", lambda repo, log, dry_run: copy_file(CODEX_CONFIG_TEMPLATE, repo / ".codex" / "config.toml", log, dry_run), group="Project files"),
         ActionSpec("mcp", "Write mcp.json", lambda repo, log, dry_run: copy_file(MCP_TEMPLATE, repo / "mcp.json", log, dry_run), group="Project files"),
-        ActionSpec("hook", "Write git hook + hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run), group="Git"),
-        ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, name_getter().strip(), email_getter().strip(), log, dry_run), group="Git"),
-        ActionSpec("graphify", "Run Graphify on repo", lambda repo, log, dry_run: build_graph(repo, log, dry_run), default=False, group="Automation"),
+        ActionSpec("hook", "Write git hook + hooksPath", lambda repo, log, dry_run: install_hook(repo, log, dry_run), group="Git", requires=("git",)),
+        ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, name_getter().strip(), email_getter().strip(), log, dry_run), group="Git", requires=("git",)),
+        ActionSpec("graphify", "Run Graphify on repo", lambda repo, log, dry_run: build_graph(repo, log, dry_run), default=False, group="Automation", requires=("graphify",)),
     ]
