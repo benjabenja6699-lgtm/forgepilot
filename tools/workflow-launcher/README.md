@@ -17,6 +17,8 @@ It does not depend on `docs/ai_rules_kit/` or any project-specific paths.
 Implementation is split into:
 
 - `launcher_core/actions.py` for installer/config actions
+- `launcher_core/catalog.py` for tool metadata
+- `launcher_core/theme.py` for palette tokens
 - `launcher_core/ui.py` for the Tk interface
 - `workflow_launcher.py` as the thin entrypoint
 

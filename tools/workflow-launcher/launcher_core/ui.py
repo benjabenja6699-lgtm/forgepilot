@@ -8,28 +8,14 @@ from tkinter import filedialog, messagebox, ttk
 
 from .actions import (
     ActionSpec,
-    TOOL_CATALOG,
-    ToolInfo,
     build_linux_config_actions,
     build_linux_install_actions,
     build_windows_config_actions,
     build_windows_install_actions,
     open_path,
 )
-
-
-PALETTE = {
-    "bg": "#ffffff",
-    "panel": "#ffffff",
-    "panel_2": "#faf8f4",
-    "text": "#1e1914",
-    "muted": "#6f685f",
-    "accent": "#c47b2b",
-    "accent_2": "#8f5f1f",
-    "entry": "#ffffff",
-    "line": "#ece6dc",
-    "soft": "#f3eee5",
-}
+from .catalog import TOOL_CATALOG, ToolInfo
+from .theme import PALETTE
 
 
 class ActionPanel(ttk.Frame):
@@ -450,4 +436,3 @@ class LauncherApp(tk.Tk):
 def main() -> None:
     app = LauncherApp()
     app.mainloop()
-
