@@ -2,6 +2,7 @@
 
 One-click launcher for the workflow suite:
 
+- `Tools` tab with small descriptions
 - `Instaladores` tab with `Windows` and `Linux`
 - `Configuraciones` tab with `Windows` and `Linux`
 - `Logs`

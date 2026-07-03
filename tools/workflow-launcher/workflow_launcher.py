@@ -33,6 +33,36 @@ class ActionSpec:
     default: bool = True
 
 
+@dataclass(frozen=True)
+class ToolInfo:
+    name: str
+    category: str
+    summary: str
+    detail: str
+    docs_url: str | None = None
+
+
+TOOL_CATALOG: list[ToolInfo] = [
+    ToolInfo("Git", "Base Dev", "Version control.", "Core VCS. Needed for repos, hooks, commits, and clone workflows."),
+    ToolInfo("GitHub CLI", "Base Dev", "GitHub in terminal.", "Used for auth, repo create, releases, PRs, issues, and automation."),
+    ToolInfo("Python", "Base Dev", "Interpreter + scripting.", "Needed for launcher scripts, utilities, and cross-platform helpers."),
+    ToolInfo("Node.js", "Base Dev", "JS runtime.", "Needed for npm-based CLIs and many agent toolchains."),
+    ToolInfo("ripgrep", "Base Dev", "Fast text search.", "Very fast code search. Better than grep for large repos."),
+    ToolInfo("jq", "Base Dev", "JSON filter.", "Terminal JSON inspection and scripting."),
+    ToolInfo("fzf", "Base Dev", "Interactive picker.", "Fuzzy selector for files, commands, and search results."),
+    ToolInfo("direnv", "Base Dev", "Per-folder env.", "Loads environment variables when entering a project folder."),
+    ToolInfo("mise", "Base Dev", "Tool version manager.", "Manages language/runtime versions and project toolchains."),
+    ToolInfo("Graphify", "Agents", "Codebase map.", "Builds a graph of code relationships so analysis can start from structure."),
+    ToolInfo("Codex CLI", "Agents", "OpenAI terminal agent.", "OpenAI terminal workflow for coding and agentic tasks.", "https://developers.openai.com/codex/cli"),
+    ToolInfo("Claude Code", "Agents", "Anthropic terminal agent.", "Terminal coding agent for analysis, edits, and repo work.", "https://docs.anthropic.com/en/docs/claude-code/overview"),
+    ToolInfo("Gemini CLI", "Agents", "Google terminal agent.", "Terminal agent for Google-backed workflows and custom commands.", "https://github.com/google-gemini/gemini-cli"),
+    ToolInfo("DeepSeek", "Providers", "DeepSeek provider.", "Provider slot for DeepSeek-backed analysis and reasoning."),
+    ToolInfo("GLM", "Providers", "GLM provider.", "Provider slot for Z.ai / GLM-backed workflows."),
+    ToolInfo("Antigravity CLI", "Agents", "Google agent CLI.", "Terminal surface for Antigravity multi-agent workflows.", "https://antigravity.google/product/antigravity-cli"),
+    ToolInfo("Caveman", "Automation", "Token saver mode.", "Compresses assistant output so responses stay short.", "https://github.com/juliusbrussee/caveman"),
+]
+
+
 def shell_runner(command: str, windows: bool) -> callable:
     def _run(repo: Path, log, dry_run: bool) -> None:
         if windows:
@@ -121,6 +151,38 @@ def install_uv_linux(repo: Path, log, dry_run: bool) -> None:
 
 def install_via_winget(package_id: str, repo: Path, log, dry_run: bool) -> None:
     run_command(["winget", "install", "--id", package_id, "-e"], repo, log, dry_run)
+
+
+def install_base_dev_windows(repo: Path, log, dry_run: bool) -> None:
+    for package_id in [
+        "Git.Git",
+        "GitHub.cli",
+        "Python.Python.3.13",
+        "OpenJS.NodeJS.LTS",
+        "BurntSushi.ripgrep.MSVC",
+        "jqlang.jq",
+        "junegunn.fzf",
+        "direnv.direnv",
+    ]:
+        install_via_winget(package_id, repo, log, dry_run)
+
+
+def install_base_dev_linux(repo: Path, log, dry_run: bool) -> None:
+    script = r"""
+set -e
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update
+  sudo apt-get install -y git gh python3 python3-pip nodejs npm ripgrep jq fzf direnv
+elif command -v dnf >/dev/null 2>&1; then
+  sudo dnf install -y git gh python3 python3-pip nodejs npm ripgrep jq fzf direnv
+elif command -v pacman >/dev/null 2>&1; then
+  sudo pacman -Sy --noconfirm git github-cli python nodejs npm ripgrep jq fzf direnv
+else
+  echo "No supported package manager found."
+  exit 1
+fi
+"""
+    run_command(["bash", "-lc", script], repo, log, dry_run)
 
 
 def install_caveman(repo: Path, log, dry_run: bool) -> None:
@@ -240,6 +302,71 @@ class ActionPanel(ttk.Frame):
         threading.Thread(target=worker, daemon=True).start()
 
 
+class ToolsPanel(ttk.Frame):
+    def __init__(self, parent, log_fn) -> None:
+        super().__init__(parent, padding=12)
+        self.log = log_fn
+        self.current_tool: ToolInfo | None = None
+
+        header = ttk.Label(self, text="Tools", font=("Segoe UI", 13, "bold"))
+        header.pack(anchor="w", pady=(0, 8))
+
+        body = ttk.Frame(self)
+        body.pack(fill="both", expand=True)
+
+        left = ttk.Frame(body)
+        left.pack(side="left", fill="y", padx=(0, 12))
+        right = ttk.Frame(body)
+        right.pack(side="left", fill="both", expand=True)
+
+        ttk.Label(left, text="Select a tool").pack(anchor="w")
+        self.listbox = tk.Listbox(left, width=28, height=22)
+        self.listbox.pack(fill="y", expand=False, pady=(4, 0))
+        self.listbox.bind("<<ListboxSelect>>", self._on_select)
+        for tool in TOOL_CATALOG:
+            self.listbox.insert("end", tool.name)
+
+        self.tool_title = ttk.Label(right, text="Tool details", font=("Segoe UI", 12, "bold"))
+        self.tool_title.pack(anchor="w")
+        self.tool_summary = ttk.Label(right, text="", wraplength=560, justify="left")
+        self.tool_summary.pack(anchor="w", pady=(4, 8))
+        self.tool_detail = tk.Text(right, height=14, wrap="word")
+        self.tool_detail.pack(fill="both", expand=True)
+        self.tool_detail.configure(state="disabled")
+
+        buttons = ttk.Frame(right)
+        buttons.pack(fill="x", pady=(8, 0))
+        self.docs_button = ttk.Button(buttons, text="Open docs", command=self._open_docs)
+        self.docs_button.pack(side="left")
+
+        self.listbox.selection_set(0)
+        self._show_tool(TOOL_CATALOG[0])
+
+    def _on_select(self, _event=None) -> None:
+        selection = self.listbox.curselection()
+        if not selection:
+            return
+        tool = TOOL_CATALOG[selection[0]]
+        self._show_tool(tool)
+
+    def _show_tool(self, tool: ToolInfo) -> None:
+        self.current_tool = tool
+        self.tool_title.configure(text=f"{tool.name}  [{tool.category}]")
+        self.tool_summary.configure(text=tool.summary)
+        self.tool_detail.configure(state="normal")
+        self.tool_detail.delete("1.0", "end")
+        self.tool_detail.insert("end", tool.detail)
+        self.tool_detail.configure(state="disabled")
+        if tool.docs_url:
+            self.docs_button.state(["!disabled"])
+        else:
+            self.docs_button.state(["disabled"])
+
+    def _open_docs(self) -> None:
+        if self.current_tool and self.current_tool.docs_url:
+            webbrowser.open(self.current_tool.docs_url)
+
+
 def build_windows_configs(repo_var, log_fn, dry_run_var, git_name_var, git_email_var) -> ActionPanel:
     actions = [
         ActionSpec("kit", "Copy ai_rules_kit into repo", lambda repo, log, dry_run: install_ai_rules_kit(repo, log, dry_run)),
@@ -298,10 +425,12 @@ class LauncherApp(tk.Tk):
 
         installers_tab = ttk.Frame(tabs)
         configs_tab = ttk.Frame(tabs)
+        tools_tab = ttk.Frame(tabs)
         logs_tab = ttk.Frame(tabs)
         settings_tab = ttk.Frame(tabs)
         tabs.add(installers_tab, text="Instaladores")
         tabs.add(configs_tab, text="Configuraciones")
+        tabs.add(tools_tab, text="Tools")
         tabs.add(logs_tab, text="Logs")
         tabs.add(settings_tab, text="Settings")
 
@@ -318,6 +447,9 @@ class LauncherApp(tk.Tk):
         lin_config = ttk.Frame(config_nb)
         config_nb.add(win_config, text="Windows")
         config_nb.add(lin_config, text="Linux")
+
+        tools_panel = ToolsPanel(tools_tab, self._log)
+        tools_panel.pack(fill="both", expand=True)
 
         self.log_text = tk.Text(logs_tab, wrap="word")
         self.log_text.pack(side="left", fill="both", expand=True)
@@ -350,6 +482,7 @@ class LauncherApp(tk.Tk):
 
     def _windows_install_actions(self) -> list[ActionSpec]:
         return [
+            ActionSpec("base-dev", "Base Dev tools", lambda repo, log, dry_run: install_base_dev_windows(repo, log, dry_run)),
             ActionSpec("graphify", "Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run)),
             ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_windows(repo, log, dry_run)),
             ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run)),
@@ -359,6 +492,7 @@ class LauncherApp(tk.Tk):
 
     def _linux_install_actions(self) -> list[ActionSpec]:
         return [
+            ActionSpec("base-dev", "Base Dev tools", lambda repo, log, dry_run: install_base_dev_linux(repo, log, dry_run)),
             ActionSpec("codex", "Codex CLI", lambda repo, log, dry_run: install_codex_linux(repo, log, dry_run)),
             ActionSpec("claude", "Claude Code", lambda repo, log, dry_run: install_claude_linux(repo, log, dry_run)),
             ActionSpec("gemini", "Gemini CLI", lambda repo, log, dry_run: install_gemini(repo, log, dry_run)),
