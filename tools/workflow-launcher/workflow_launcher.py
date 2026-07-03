@@ -252,8 +252,7 @@ class ActionPanel(ttk.Frame):
         self.auto_open_var = auto_open_var
         self.action_vars: dict[str, tk.BooleanVar] = {}
 
-        ttk.Label(self, text=title, style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 4))
-        ttk.Label(self, text=description, style="Muted.TLabel", wraplength=960, justify="left").pack(anchor="w", pady=(0, 12))
+        ttk.Label(self, text=title, style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 8))
 
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
@@ -328,12 +327,7 @@ class ToolsPanel(ttk.Frame):
         self.palette = palette
         self.current_tool: ToolInfo | None = None
 
-        ttk.Label(self, text="Herramientas", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 4))
-        ttk.Label(
-            self,
-            text="Lista resumida de CLIs, automatizacion y proveedores usados por el launcher.",
-            style="Muted.TLabel",
-        ).pack(anchor="w", pady=(0, 12))
+        ttk.Label(self, text="Herramientas", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 8))
 
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
@@ -491,9 +485,6 @@ class LauncherApp(tk.Tk):
         badge.create_text(13, 13, text="FP", fill=self.palette["text"], font=("Segoe UI", 8, "bold"))
         badge.pack(side="left")
         ttk.Label(brand, text="ForgePilot", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 1))
-        ttk.Label(brand, text="Launcher portable", style="Muted.TLabel").pack(anchor="w")
-
-        ttk.Label(sidebar, text="Secciones", style="Muted.TLabel").pack(anchor="w", padx=8, pady=(10, 8))
 
         nav_buttons = {}
         for key, label in [
@@ -541,14 +532,9 @@ class LauncherApp(tk.Tk):
 
     def _build_installers_page(self, parent: ttk.Frame) -> None:
         ttk.Label(parent, text="Instaladores", style="HeroTitle.TLabel").pack(anchor="w")
-        ttk.Label(
-            parent,
-            text="Instala los componentes mas usados en Windows o Linux. La lista se mantiene igual, solo cambia la presentacion.",
-            style="Muted.TLabel",
-        ).pack(anchor="w", pady=(4, 18))
 
         env_row = ttk.Frame(parent, style="Card.TFrame")
-        env_row.pack(fill="x", pady=(0, 14))
+        env_row.pack(fill="x", pady=(0, 12))
         ttk.Button(env_row, text="Windows", command=lambda: self._swap_installers("windows")).pack(side="left")
         ttk.Button(env_row, text="Linux", command=lambda: self._swap_installers("linux")).pack(side="left", padx=6)
 
@@ -562,8 +548,7 @@ class LauncherApp(tk.Tk):
 
         ActionPanel(
             self.win_install,
-            "Windows installers",
-            "Instala los componentes mas usados en Windows. El grupo CLI base agrupa las herramientas que casi siempre hacen falta, mientras que Agents y Automation cubren los CLIs de trabajo y Graphify.",
+            "Windows",
             self._windows_install_actions(),
             self.repo_var,
             self._log,
@@ -573,8 +558,7 @@ class LauncherApp(tk.Tk):
 
         ActionPanel(
             self.lin_install,
-            "Linux installers",
-            "Instaladores equivalentes para Linux. El grupo CLI base usa el gestor local cuando puede, y los CLIs de agentes se instalan con sus comandos oficiales.",
+            "Linux",
             self._linux_install_actions(),
             self.repo_var,
             self._log,
@@ -586,14 +570,9 @@ class LauncherApp(tk.Tk):
 
     def _build_configs_page(self, parent: ttk.Frame) -> None:
         ttk.Label(parent, text="Configuraciones", style="HeroTitle.TLabel").pack(anchor="w")
-        ttk.Label(
-            parent,
-            text="Escribe los archivos de configuracion que este launcher genera en cualquier proyecto.",
-            style="Muted.TLabel",
-        ).pack(anchor="w", pady=(4, 18))
 
         env_row = ttk.Frame(parent, style="Card.TFrame")
-        env_row.pack(fill="x", pady=(0, 14))
+        env_row.pack(fill="x", pady=(0, 12))
         ttk.Button(env_row, text="Windows", command=lambda: self._swap_configs("windows")).pack(side="left")
         ttk.Button(env_row, text="Linux", command=lambda: self._swap_configs("linux")).pack(side="left", padx=6)
 
@@ -607,8 +586,7 @@ class LauncherApp(tk.Tk):
 
         ActionPanel(
             self.win_config,
-            "Windows configurations",
-            "Escribe los archivos de configuracion que este launcher genera en cualquier proyecto: AGENTS.md, Codex config, MCP y hook de git.",
+            "Windows",
             self._windows_config_actions(),
             self.repo_var,
             self._log,
@@ -618,8 +596,7 @@ class LauncherApp(tk.Tk):
 
         ActionPanel(
             self.lin_config,
-            "Linux configurations",
-            "Mismo flujo de configuracion, pero respetando la ruta y el comportamiento tipico de Linux.",
+            "Linux",
             self._linux_config_actions(),
             self.repo_var,
             self._log,
@@ -634,7 +611,7 @@ class LauncherApp(tk.Tk):
 
     def _build_logs_page(self, parent: ttk.Frame) -> None:
         ttk.Label(parent, text="Logs", style="HeroTitle.TLabel").pack(anchor="w")
-        ttk.Label(parent, text="Salida en tiempo real de las acciones y comandos.", style="Muted.TLabel").pack(anchor="w", pady=(4, 18))
+        ttk.Frame(parent, height=8, style="Card.TFrame").pack(anchor="w")
         self.log_text = tk.Text(parent, wrap="word", borderwidth=0, highlightthickness=1)
         self.log_text.pack(fill="both", expand=True)
         scroll = ttk.Scrollbar(parent, orient="vertical", command=self.log_text.yview)
@@ -652,7 +629,7 @@ class LauncherApp(tk.Tk):
 
     def _build_settings_page(self, parent: ttk.Frame) -> None:
         ttk.Label(parent, text="Ajustes", style="HeroTitle.TLabel").pack(anchor="w")
-        ttk.Label(parent, text="Opciones globales del launcher.", style="Muted.TLabel").pack(anchor="w", pady=(4, 18))
+        ttk.Frame(parent, height=8, style="Card.TFrame").pack(anchor="w")
         settings = ttk.Frame(parent, padding=0, style="Card.TFrame")
         settings.pack(fill="both", expand=True)
         ttk.Checkbutton(settings, text="Dry run only", variable=self.dry_run_var).pack(anchor="w", pady=6)
