@@ -20,6 +20,12 @@ python .\tools\workflow-launcher\workflow_launcher.py
 irm https://raw.githubusercontent.com/benjabenja6699-lgtm/forgepilot/main/bootstrap.ps1 | iex
 ```
 
+That installs or updates the launcher in:
+
+```text
+%LOCALAPPDATA%\ForgePilotLauncher
+```
+
 ## Build exe
 
 ```powershell

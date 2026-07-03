@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repoUrl = 'https://github.com/benjabenja6699-lgtm/forgepilot.git'
-$root = Join-Path $env:TEMP 'forgepilot'
+$root = Join-Path $env:LOCALAPPDATA 'ForgePilotLauncher'
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw 'git not found in PATH'
@@ -12,9 +12,9 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 if (-not (Test-Path $root)) {
-    git clone $repoUrl $root
+    git clone --branch main --single-branch $repoUrl $root
 } else {
-    git -C $root pull
+    git -C $root pull --ff-only origin main
 }
 
 Set-Location $root
