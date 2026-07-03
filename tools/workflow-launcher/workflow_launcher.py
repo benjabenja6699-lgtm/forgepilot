@@ -344,7 +344,7 @@ class ToolsPanel(ttk.Frame):
         right.pack(side="left", fill="both", expand=True)
 
         ttk.Label(left, text="Selecciona una herramienta", style="Section.TLabel").pack(anchor="w")
-        self.listbox = tk.Listbox(left, width=30, height=22)
+        self.listbox = tk.Listbox(left, width=30, height=22, borderwidth=0, highlightthickness=1)
         self.listbox.pack(fill="y", expand=False, pady=(6, 0))
         self.listbox.bind("<<ListboxSelect>>", self._on_select)
         for tool in TOOL_CATALOG:
@@ -433,6 +433,7 @@ class LauncherApp(tk.Tk):
         self.auto_open_var = tk.BooleanVar(value=False)
         self.git_name_var = tk.StringVar(value="")
         self.git_email_var = tk.StringVar(value="")
+        self.current_page = tk.StringVar(value="installers")
 
         self._configure_style()
         self._build_ui()
@@ -447,25 +448,14 @@ class LauncherApp(tk.Tk):
         self.configure(bg=self.palette["bg"])
         style.configure("TFrame", background=self.palette["bg"])
         style.configure("Card.TFrame", background=self.palette["panel"], relief="flat")
+        style.configure("Sidebar.TFrame", background=self.palette["panel"], relief="flat")
+        style.configure("Surface.TFrame", background=self.palette["panel"], relief="flat")
         style.configure("Inner.TFrame", background=self.palette["panel_2"])
         style.configure("TLabel", background=self.palette["bg"], foreground=self.palette["text"], font=("Segoe UI", 10))
-        style.configure("HeroTitle.TLabel", background=self.palette["bg"], foreground=self.palette["accent"], font=("Consolas", 19, "bold"))
-        style.configure("Section.TLabel", background=self.palette["bg"], foreground=self.palette["text"], font=("Segoe UI", 11, "bold"))
-        style.configure("Muted.TLabel", background=self.palette["bg"], foreground=self.palette["muted"], font=("Segoe UI", 9))
-        style.configure("TNotebook", background=self.palette["bg"], borderwidth=0)
-        style.configure(
-            "TNotebook.Tab",
-            background=self.palette["panel_2"],
-            foreground=self.palette["muted"],
-            padding=(16, 9),
-            font=("Segoe UI", 10),
-        )
-        style.map(
-            "TNotebook.Tab",
-            background=[("selected", self.palette["panel"])],
-            foreground=[("selected", self.palette["accent"])],
-        )
-        style.configure("TButton", background=self.palette["panel"], foreground=self.palette["text"], padding=(12, 8), relief="flat")
+        style.configure("HeroTitle.TLabel", background=self.palette["panel"], foreground=self.palette["text"], font=("Segoe UI", 15, "bold"))
+        style.configure("Section.TLabel", background=self.palette["panel"], foreground=self.palette["text"], font=("Segoe UI", 10, "bold"))
+        style.configure("Muted.TLabel", background=self.palette["panel"], foreground=self.palette["muted"], font=("Segoe UI", 9))
+        style.configure("TButton", background=self.palette["panel"], foreground=self.palette["text"], padding=(10, 7), relief="flat")
         style.map(
             "TButton",
             background=[("active", self.palette["panel_2"])],
@@ -473,101 +463,97 @@ class LauncherApp(tk.Tk):
         )
         style.configure("TCheckbutton", background=self.palette["panel"], foreground=self.palette["text"], font=("Segoe UI", 10))
         style.map("TCheckbutton", foreground=[("active", self.palette["accent"])])
-        style.configure("TLabelframe", background=self.palette["panel"], foreground=self.palette["accent"], borderwidth=0, relief="flat")
-        style.configure("TLabelframe.Label", background=self.palette["panel"], foreground=self.palette["accent"], font=("Segoe UI", 10, "bold"))
         style.configure("TEntry", fieldbackground=self.palette["entry"], foreground=self.palette["text"], insertcolor=self.palette["text"])
         style.configure("TScrollbar", background=self.palette["panel"], troughcolor=self.palette["bg"], arrowcolor=self.palette["text"])
 
     def _build_ui(self) -> None:
-        outer = ttk.Frame(self, padding=18, style="Card.TFrame")
-        outer.pack(fill="both", expand=True)
+        root = ttk.Frame(self, padding=14, style="Card.TFrame")
+        root.pack(fill="both", expand=True)
 
-        hero = ttk.Frame(outer, padding=(18, 16), style="Inner.TFrame")
-        hero.pack(fill="x", pady=(0, 14))
-        ttk.Label(hero, text="ForgePilot Launcher", style="HeroTitle.TLabel").pack(anchor="w")
-        ttk.Label(
-            hero,
-            text="Panel retro portable para instalar CLIs, escribir reglas, configurar hooks y lanzar Graphify.",
-            style="Muted.TLabel",
-        ).pack(anchor="w", pady=(4, 0))
+        sidebar = ttk.Frame(root, width=220, padding=(4, 4, 16, 4), style="Sidebar.TFrame")
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
 
-        top = ttk.Frame(outer, padding=(2, 0))
-        top.pack(fill="x", pady=(0, 12))
-        ttk.Label(top, text="Repo destino", style="Section.TLabel").pack(anchor="w")
-        row = ttk.Frame(top)
-        row.pack(fill="x", pady=(4, 0))
-        ttk.Entry(row, textvariable=self.repo_var).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="Browse", command=self._browse_repo).pack(side="left", padx=(8, 0))
+        brand = ttk.Frame(sidebar, padding=(10, 10, 10, 18), style="Sidebar.TFrame")
+        brand.pack(fill="x")
+        badge_row = ttk.Frame(brand, style="Sidebar.TFrame")
+        badge_row.pack(anchor="w", pady=(0, 10))
+        badge = tk.Canvas(badge_row, width=26, height=26, bg=self.palette["panel"], highlightthickness=0)
+        badge.create_rectangle(2, 2, 24, 24, outline=self.palette["accent"], width=1)
+        badge.create_text(13, 13, text="FP", fill=self.palette["text"], font=("Segoe UI", 8, "bold"))
+        badge.pack(side="left")
+        ttk.Label(brand, text="ForgePilot", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 2))
+        ttk.Label(brand, text="Launcher portable", style="Muted.TLabel").pack(anchor="w")
 
-        tabs = ttk.Notebook(outer)
-        tabs.pack(fill="both", expand=True)
+        ttk.Label(sidebar, text="Secciones", style="Muted.TLabel").pack(anchor="w", padx=12, pady=(8, 8))
 
-        installers_tab = ttk.Frame(tabs)
-        configs_tab = ttk.Frame(tabs)
-        tools_tab = ttk.Frame(tabs)
-        logs_tab = ttk.Frame(tabs)
-        settings_tab = ttk.Frame(tabs)
-        tabs.add(installers_tab, text="Instaladores")
-        tabs.add(configs_tab, text="Configuraciones")
-        tabs.add(tools_tab, text="Herramientas")
-        tabs.add(logs_tab, text="Logs")
-        tabs.add(settings_tab, text="Ajustes")
+        nav_buttons = {}
+        for key, label in [
+            ("installers", "Instaladores"),
+            ("configs", "Configuraciones"),
+            ("tools", "Herramientas"),
+            ("logs", "Logs"),
+            ("settings", "Ajustes"),
+        ]:
+            nav_buttons[key] = ttk.Button(
+                sidebar,
+                text=label,
+                command=lambda page=key: self._show_page(page),
+                style="TButton",
+            )
+            nav_buttons[key].pack(fill="x", padx=8, pady=4)
 
-        install_nb = ttk.Notebook(installers_tab)
-        install_nb.pack(fill="both", expand=True, padx=2, pady=2)
-        win_install = ttk.Frame(install_nb)
-        lin_install = ttk.Frame(install_nb)
-        install_nb.add(win_install, text="Windows")
-        install_nb.add(lin_install, text="Linux")
+        content = ttk.Frame(root, padding=(18, 8, 8, 8), style="Card.TFrame")
+        content.pack(side="left", fill="both", expand=True)
 
-        config_nb = ttk.Notebook(configs_tab)
-        config_nb.pack(fill="both", expand=True, padx=2, pady=2)
-        win_config = ttk.Frame(config_nb)
-        lin_config = ttk.Frame(config_nb)
-        config_nb.add(win_config, text="Windows")
-        config_nb.add(lin_config, text="Linux")
+        top = ttk.Frame(content, style="Card.TFrame")
+        top.pack(fill="x", pady=(0, 14))
+        top.grid_columnconfigure(0, weight=1)
+        top.grid_columnconfigure(1, weight=0)
+        ttk.Entry(top, textvariable=self.repo_var, width=60).grid(row=0, column=0, sticky="ew", padx=(0, 12))
+        ttk.Button(top, text="Browse", command=self._browse_repo).grid(row=0, column=1, sticky="e")
 
-        tools_panel = ToolsPanel(tools_tab, self._log, self.palette)
-        tools_panel.pack(fill="both", expand=True)
+        self.page_container = ttk.Frame(content, style="Card.TFrame")
+        self.page_container.pack(fill="both", expand=True)
 
-        self.log_text = tk.Text(logs_tab, wrap="word")
-        self.log_text.pack(side="left", fill="both", expand=True)
-        scroll = ttk.Scrollbar(logs_tab, orient="vertical", command=self.log_text.yview)
-        scroll.pack(side="right", fill="y")
-        self.log_text.configure(yscrollcommand=scroll.set)
-        self.log_text.configure(
-            bg=self.palette["entry"],
-            fg=self.palette["text"],
-            insertbackground=self.palette["text"],
-            highlightthickness=1,
-            highlightbackground="#ddd6c9",
-            relief="flat",
-            font=("Consolas", 10),
-        )
+        self.pages: dict[str, ttk.Frame] = {}
+        for key in ["installers", "configs", "tools", "logs", "settings"]:
+            frame = ttk.Frame(self.page_container, style="Card.TFrame")
+            frame.place(relx=0, rely=0, relwidth=1, relheight=1)
+            self.pages[key] = frame
 
-        settings = ttk.Frame(settings_tab, padding=14, style="Inner.TFrame")
-        settings.pack(fill="both", expand=True)
-        ttk.Checkbutton(settings, text="Dry run only", variable=self.dry_run_var).pack(anchor="w", pady=4)
-        ttk.Checkbutton(settings, text="Open repo folder after successful run", variable=self.auto_open_var).pack(anchor="w", pady=4)
-        ttk.Label(settings, text="Git user.name").pack(anchor="w", pady=(14, 2))
-        ttk.Entry(settings, textvariable=self.git_name_var).pack(fill="x")
-        ttk.Label(settings, text="Git user.email").pack(anchor="w", pady=(10, 2))
-        ttk.Entry(settings, textvariable=self.git_email_var).pack(fill="x")
-        ttk.Button(
-            settings,
-            text="Open ForgePilot repo",
-            command=lambda: webbrowser.open("https://github.com/benjabenja6699-lgtm/forgepilot"),
-        ).pack(anchor="w", pady=(16, 0))
-        ttk.Button(
-            settings,
-            text="Open Codex docs",
-            command=lambda: webbrowser.open("https://developers.openai.com/codex/cli"),
-        ).pack(anchor="w", pady=(8, 0))
+        self._build_installers_page(self.pages["installers"])
+        self._build_configs_page(self.pages["configs"])
+        self._build_tools_page(self.pages["tools"])
+        self._build_logs_page(self.pages["logs"])
+        self._build_settings_page(self.pages["settings"])
 
+        self._show_page("installers")
         self._log("Ready.")
 
-        windows_install_panel = ActionPanel(
-            win_install,
+    def _build_installers_page(self, parent: ttk.Frame) -> None:
+        ttk.Label(parent, text="Instaladores", style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            parent,
+            text="Instala los componentes mas usados en Windows o Linux. La lista se mantiene igual, solo cambia la presentacion.",
+            style="Muted.TLabel",
+        ).pack(anchor="w", pady=(4, 18))
+
+        env_row = ttk.Frame(parent, style="Card.TFrame")
+        env_row.pack(fill="x", pady=(0, 18))
+        ttk.Button(env_row, text="Windows", command=lambda: self._swap_installers("windows")).pack(side="left")
+        ttk.Button(env_row, text="Linux", command=lambda: self._swap_installers("linux")).pack(side="left", padx=8)
+
+        self.installers_stack = ttk.Frame(parent, style="Card.TFrame")
+        self.installers_stack.pack(fill="both", expand=True)
+
+        self.win_install = ttk.Frame(self.installers_stack, style="Card.TFrame")
+        self.lin_install = ttk.Frame(self.installers_stack, style="Card.TFrame")
+        self.win_install.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.lin_install.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        ActionPanel(
+            self.win_install,
             "Windows installers",
             "Instala los componentes mas usados en Windows. El grupo CLI base agrupa las herramientas que casi siempre hacen falta, mientras que Agents y Automation cubren los CLIs de trabajo y Graphify.",
             self._windows_install_actions(),
@@ -575,11 +561,10 @@ class LauncherApp(tk.Tk):
             self._log,
             self.dry_run_var,
             self.auto_open_var,
-        )
-        windows_install_panel.pack(fill="both", expand=True)
+        ).pack(fill="both", expand=True)
 
-        linux_install_panel = ActionPanel(
-            lin_install,
+        ActionPanel(
+            self.lin_install,
             "Linux installers",
             "Instaladores equivalentes para Linux. El grupo CLI base usa el gestor local cuando puede, y los CLIs de agentes se instalan con sus comandos oficiales.",
             self._linux_install_actions(),
@@ -587,11 +572,33 @@ class LauncherApp(tk.Tk):
             self._log,
             self.dry_run_var,
             self.auto_open_var,
-        )
-        linux_install_panel.pack(fill="both", expand=True)
+        ).pack(fill="both", expand=True)
 
-        windows_config_panel = ActionPanel(
-            win_config,
+        self._swap_installers("windows")
+
+    def _build_configs_page(self, parent: ttk.Frame) -> None:
+        ttk.Label(parent, text="Configuraciones", style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            parent,
+            text="Escribe los archivos de configuracion que este launcher genera en cualquier proyecto.",
+            style="Muted.TLabel",
+        ).pack(anchor="w", pady=(4, 18))
+
+        env_row = ttk.Frame(parent, style="Card.TFrame")
+        env_row.pack(fill="x", pady=(0, 18))
+        ttk.Button(env_row, text="Windows", command=lambda: self._swap_configs("windows")).pack(side="left")
+        ttk.Button(env_row, text="Linux", command=lambda: self._swap_configs("linux")).pack(side="left", padx=8)
+
+        self.configs_stack = ttk.Frame(parent, style="Card.TFrame")
+        self.configs_stack.pack(fill="both", expand=True)
+
+        self.win_config = ttk.Frame(self.configs_stack, style="Card.TFrame")
+        self.lin_config = ttk.Frame(self.configs_stack, style="Card.TFrame")
+        self.win_config.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.lin_config.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        ActionPanel(
+            self.win_config,
             "Windows configurations",
             "Escribe los archivos de configuracion que este launcher genera en cualquier proyecto: AGENTS.md, Codex config, MCP y hook de git.",
             self._windows_config_actions(),
@@ -599,11 +606,10 @@ class LauncherApp(tk.Tk):
             self._log,
             self.dry_run_var,
             self.auto_open_var,
-        )
-        windows_config_panel.pack(fill="both", expand=True)
+        ).pack(fill="both", expand=True)
 
-        linux_config_panel = ActionPanel(
-            lin_config,
+        ActionPanel(
+            self.lin_config,
             "Linux configurations",
             "Mismo flujo de configuracion, pero respetando la ruta y el comportamiento tipico de Linux.",
             self._linux_config_actions(),
@@ -611,8 +617,54 @@ class LauncherApp(tk.Tk):
             self._log,
             self.dry_run_var,
             self.auto_open_var,
+        ).pack(fill="both", expand=True)
+
+        self._swap_configs("windows")
+
+    def _build_tools_page(self, parent: ttk.Frame) -> None:
+        ToolsPanel(parent, self._log, self.palette).pack(fill="both", expand=True)
+
+    def _build_logs_page(self, parent: ttk.Frame) -> None:
+        ttk.Label(parent, text="Logs", style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(parent, text="Salida en tiempo real de las acciones y comandos.", style="Muted.TLabel").pack(anchor="w", pady=(4, 18))
+        self.log_text = tk.Text(parent, wrap="word", borderwidth=0, highlightthickness=1)
+        self.log_text.pack(fill="both", expand=True)
+        scroll = ttk.Scrollbar(parent, orient="vertical", command=self.log_text.yview)
+        scroll.place(relx=1.0, rely=0.16, relheight=0.84, anchor="ne")
+        self.log_text.configure(yscrollcommand=scroll.set)
+        self.log_text.configure(
+            bg=self.palette["entry"],
+            fg=self.palette["text"],
+            insertbackground=self.palette["text"],
+            highlightbackground="#ddd6c9",
+            highlightcolor="#ddd6c9",
+            relief="flat",
+            font=("Consolas", 10),
         )
-        linux_config_panel.pack(fill="both", expand=True)
+
+    def _build_settings_page(self, parent: ttk.Frame) -> None:
+        ttk.Label(parent, text="Ajustes", style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(parent, text="Opciones globales del launcher.", style="Muted.TLabel").pack(anchor="w", pady=(4, 18))
+        settings = ttk.Frame(parent, padding=0, style="Card.TFrame")
+        settings.pack(fill="both", expand=True)
+        ttk.Checkbutton(settings, text="Dry run only", variable=self.dry_run_var).pack(anchor="w", pady=6)
+        ttk.Checkbutton(settings, text="Open repo folder after successful run", variable=self.auto_open_var).pack(anchor="w", pady=6)
+        ttk.Label(settings, text="Git user.name").pack(anchor="w", pady=(16, 2))
+        ttk.Entry(settings, textvariable=self.git_name_var).pack(fill="x")
+        ttk.Label(settings, text="Git user.email").pack(anchor="w", pady=(10, 2))
+        ttk.Entry(settings, textvariable=self.git_email_var).pack(fill="x")
+        ttk.Button(settings, text="Open ForgePilot repo", command=lambda: webbrowser.open("https://github.com/benjabenja6699-lgtm/forgepilot")).pack(anchor="w", pady=(16, 0))
+        ttk.Button(settings, text="Open Codex docs", command=lambda: webbrowser.open("https://developers.openai.com/codex/cli")).pack(anchor="w", pady=(8, 0))
+
+    def _swap_installers(self, kind: str) -> None:
+        self.win_install.lift() if kind == "windows" else self.lin_install.lift()
+
+    def _swap_configs(self, kind: str) -> None:
+        self.win_config.lift() if kind == "windows" else self.lin_config.lift()
+
+    def _show_page(self, key: str) -> None:
+        self.current_page.set(key)
+        self.pages[key].tkraise()
 
     def _windows_install_actions(self) -> list[ActionSpec]:
         return [
