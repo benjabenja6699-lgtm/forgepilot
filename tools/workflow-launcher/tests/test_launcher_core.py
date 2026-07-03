@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
 
 from launcher_core.actions import build_linux_config_actions, build_linux_install_actions, build_windows_config_actions, build_windows_install_actions
 from launcher_core.catalog import TOOL_CATALOG
-from launcher_core.prereqs import missing_prerequisites
+from launcher_core.prereqs import format_missing_prerequisites, missing_prerequisites
 from launcher_core.theme import PALETTE
 import workflow_launcher
 
@@ -63,7 +63,7 @@ class LauncherCoreTests(unittest.TestCase):
             git_id.runner(repo, calls.append, True)
 
         self.assertEqual(calls[:2], ["name", "email"])
-        self.assertIn("$ git -C", calls[2])
+        self.assertIn("config user.name Ada Lovelace", calls[2])
 
     def test_entrypoint_exports_main(self) -> None:
         self.assertTrue(callable(workflow_launcher.main))
@@ -75,8 +75,9 @@ class LauncherCoreTests(unittest.TestCase):
         with mock.patch("launcher_core.prereqs.shutil.which", return_value=None):
             missing = missing_prerequisites(selected)
 
-        self.assertIn("winget", missing)
-        self.assertIn("Base Dev tools", missing["winget"])
+        self.assertEqual(missing[0].command_name, "winget")
+        self.assertIn("Base Dev tools", missing[0].actions)
+        self.assertIn("winget needed by", format_missing_prerequisites(missing))
 
 
 if __name__ == "__main__":

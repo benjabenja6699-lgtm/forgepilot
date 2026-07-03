@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 from unittest.mock import patch
 
 
@@ -12,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-from launcher_core.actions import copy_file, copy_tree, install_base_dev_linux, install_base_dev_windows, install_hook
+from launcher_core.actions import build_prereq_install_actions, copy_file, copy_tree, install_base_dev_linux, install_base_dev_windows, install_hook
 
 
 class LauncherActionTests(unittest.TestCase):
@@ -109,6 +110,17 @@ class LauncherActionTests(unittest.TestCase):
             self.assertIn("curl", script)
             self.assertIn("ca-certificates", script)
             uv_mock.assert_called_once_with(repo, logs.append, False)
+
+    def test_prereq_plan_suggests_base_dev_and_graphify(self) -> None:
+        with mock.patch("launcher_core.actions.resolve_command", return_value=None), mock.patch("launcher_core.actions.shutil.which", return_value="winget"):
+            actions = build_prereq_install_actions(
+                [
+                    type("Dummy", (), {"requires": ("graphify",)})(),
+                ]
+            )
+        keys = [action.key for action in actions]
+        self.assertIn("base-dev", keys)
+        self.assertIn("graphify", keys)
 
 
 if __name__ == "__main__":

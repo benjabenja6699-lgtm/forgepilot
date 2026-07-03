@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import threading
+import platform
 import tkinter as tk
 import webbrowser
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-from .actions import ActionSpec, open_path
+from .actions import ActionSpec, build_prereq_install_actions, open_path
 from .catalog import TOOL_CATALOG, ToolInfo
-from .prereqs import missing_prerequisites
+from .prereqs import format_missing_prerequisites, missing_prerequisites
 
 
 class ActionPanel(ttk.Frame):
@@ -78,15 +79,19 @@ class ActionPanel(ttk.Frame):
             return
 
         missing = missing_prerequisites(selected)
+        prereq_actions = build_prereq_install_actions(selected)
         if missing:
-            lines = ["Missing prerequisites detected before running:"]
-            for command_name, labels in sorted(missing.items()):
-                labels_text = ", ".join(labels)
-                lines.append(f"- {command_name} needed by: {labels_text}")
-            message = "\n".join(lines)
+            message = format_missing_prerequisites(missing)
             self.log(message)
-            messagebox.showerror("Missing prerequisites", message)
-            return
+            if not prereq_actions:
+                messagebox.showerror("Missing prerequisites", message)
+                return
+            install = messagebox.askyesno(
+                "Missing prerequisites",
+                f"{message}\n\nInstall prerequisites now?",
+            )
+            if not install:
+                return
 
         dry_run = self.dry_run_var.get()
 
@@ -94,6 +99,9 @@ class ActionPanel(ttk.Frame):
             try:
                 self.log(f"Repo: {repo}")
                 self.log(f"Mode: {'dry-run' if dry_run else 'apply'}")
+                for prereq_action in prereq_actions:
+                    self.log(f"Installing prerequisite: {prereq_action.label}")
+                    prereq_action.runner(repo, self.log, dry_run)
                 for action in selected:
                     self.log(f"Running: {action.label}")
                     action.runner(repo, self.log, dry_run)

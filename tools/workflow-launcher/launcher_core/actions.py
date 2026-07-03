@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from .assets import AGENTS_TEMPLATE, CODEX_CONFIG_TEMPLATE, HOOK_TEMPLATE, MCP_TEMPLATE
 from .catalog import ToolInfo
+from .prereqs import resolve_command
 
 
 @dataclass(frozen=True)
@@ -29,11 +30,17 @@ LOCAL_CAVEMAN_SOURCES = [
 
 
 def run_command(command: list[str], cwd: Path | None, log, dry_run: bool = False) -> None:
-    log(f"$ {' '.join(command)}")
+    normalized = list(command)
+    executable = resolve_command(normalized[0])
+    if executable:
+        normalized[0] = executable
+        if platform.system() == "Windows" and executable.lower().endswith((".cmd", ".bat")):
+            normalized = ["cmd", "/d", "/s", "/c", *normalized]
+    log(f"$ {' '.join(normalized)}")
     if dry_run:
         return
     proc = subprocess.run(
-        command,
+        normalized,
         cwd=str(cwd) if cwd else None,
         capture_output=True,
         text=True,
@@ -43,7 +50,7 @@ def run_command(command: list[str], cwd: Path | None, log, dry_run: bool = False
     if output.strip():
         log(output.rstrip())
     if proc.returncode != 0:
-        raise RuntimeError(f"Command failed: {' '.join(command)}")
+        raise RuntimeError(f"Command failed: {' '.join(normalized)}")
 
 
 def _require_command(command_name: str, purpose: str) -> None:
@@ -261,3 +268,36 @@ def build_linux_config_actions(name_getter: Callable[[], str], email_getter: Cal
         ActionSpec("git-id", "Set git name/email", lambda repo, log, dry_run: set_git_identity(repo, name_getter().strip(), email_getter().strip(), log, dry_run), group="Git", requires=("git",)),
         ActionSpec("graphify", "Run Graphify on repo", lambda repo, log, dry_run: build_graph(repo, log, dry_run), default=False, group="Automation", requires=("graphify",)),
     ]
+
+
+def build_prereq_install_actions(selected_actions: list[ActionSpec]) -> list[ActionSpec]:
+    missing_commands = {command for action in selected_actions for command in action.requires if not resolve_command(command)}
+    if not missing_commands:
+        return []
+
+    actions: list[ActionSpec] = []
+    if platform.system() == "Windows":
+        installable_base = {"git", "gh", "python", "node", "rg", "jq", "fzf", "direnv", "uv"}
+        if "graphify" in missing_commands:
+            if shutil.which("winget"):
+                actions.append(ActionSpec("base-dev", "Install Base Dev tools", lambda repo, log, dry_run: install_base_dev_windows(repo, log, dry_run), default=False, group="Prerequisites"))
+                actions.append(ActionSpec("graphify", "Install Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run), default=False, group="Prerequisites"))
+        elif missing_commands & installable_base:
+            if shutil.which("winget"):
+                actions.append(ActionSpec("base-dev", "Install Base Dev tools", lambda repo, log, dry_run: install_base_dev_windows(repo, log, dry_run), default=False, group="Prerequisites"))
+    else:
+        installable_base = {"bash", "curl", "git", "gh", "python", "node", "npm", "ripgrep", "jq", "fzf", "direnv", "uv"}
+        if "graphify" in missing_commands:
+            actions.append(ActionSpec("base-dev", "Install CLI base", lambda repo, log, dry_run: install_base_dev_linux(repo, log, dry_run), default=False, group="Prerequisites"))
+            actions.append(ActionSpec("graphify", "Install Graphify", lambda repo, log, dry_run: install_graphify(repo, log, dry_run), default=False, group="Prerequisites"))
+        elif missing_commands & installable_base:
+            actions.append(ActionSpec("base-dev", "Install CLI base", lambda repo, log, dry_run: install_base_dev_linux(repo, log, dry_run), default=False, group="Prerequisites"))
+
+    deduped: list[ActionSpec] = []
+    seen: set[str] = set()
+    for action in actions:
+        if action.key in seen:
+            continue
+        deduped.append(action)
+        seen.add(action.key)
+    return deduped
