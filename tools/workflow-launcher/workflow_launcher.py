@@ -267,13 +267,17 @@ class ActionPanel(ttk.Frame):
             groups[action.group].append(action)
 
         for group_name in order:
-            group_box = ttk.Labelframe(body, text=group_name, padding=12)
-            group_box.pack(fill="x", expand=False, pady=(0, 10))
+            group_box = ttk.Frame(body, padding=(0, 2, 0, 10))
+            group_box.pack(fill="x", expand=False, pady=(0, 8))
+            header = ttk.Frame(group_box)
+            header.pack(fill="x", pady=(0, 8))
+            ttk.Label(header, text=group_name, style="Section.TLabel").pack(side="left", anchor="w")
+            ttk.Separator(header, orient="horizontal").pack(side="left", fill="x", expand=True, padx=(10, 0))
             for action in groups[group_name]:
                 var = tk.BooleanVar(value=action.default)
                 self.action_vars[action.key] = var
                 row = ttk.Frame(group_box)
-                row.pack(fill="x", anchor="w", pady=4)
+                row.pack(fill="x", anchor="w", pady=2)
                 ttk.Checkbutton(row, text=action.label, variable=var).pack(anchor="w")
 
         buttons = ttk.Frame(self)
@@ -359,21 +363,21 @@ class ToolsPanel(ttk.Frame):
         self.docs_button.pack(side="left")
 
         self.listbox.configure(
-            bg="#120f0d",
-            fg="#f2e7d5",
-            selectbackground="#f5b84b",
-            selectforeground="#14110f",
+            bg=self.palette["entry"],
+            fg=self.palette["text"],
+            selectbackground=self.palette["accent"],
+            selectforeground="#fffdf8",
             highlightthickness=1,
-            highlightbackground="#4a392d",
+            highlightbackground="#ddd6c9",
             relief="flat",
             font=("Consolas", 10),
         )
         self.tool_detail.configure(
-            bg="#120f0d",
-            fg="#f2e7d5",
-            insertbackground="#f2e7d5",
+            bg=self.palette["entry"],
+            fg=self.palette["text"],
+            insertbackground=self.palette["text"],
             highlightthickness=1,
-            highlightbackground="#4a392d",
+            highlightbackground="#ddd6c9",
             relief="flat",
             font=("Consolas", 10),
         )
@@ -413,14 +417,14 @@ class LauncherApp(tk.Tk):
         self.minsize(1060, 740)
 
         self.palette = {
-            "bg": "#14110f",
-            "panel": "#1d1814",
-            "panel_2": "#251f1a",
-            "text": "#f2e7d5",
-            "muted": "#c8b79d",
-            "accent": "#f5b84b",
-            "accent_2": "#ff8f5a",
-            "entry": "#120f0d",
+            "bg": "#f4efe6",
+            "panel": "#fcfaf6",
+            "panel_2": "#f7f2ea",
+            "text": "#1e1914",
+            "muted": "#6f685f",
+            "accent": "#c47b2b",
+            "accent_2": "#8f5f1f",
+            "entry": "#fffdf8",
         }
 
         self.repo_var = tk.StringVar(value=str(Path.cwd()))
@@ -444,31 +448,31 @@ class LauncherApp(tk.Tk):
         style.configure("Card.TFrame", background=self.palette["panel"], relief="flat")
         style.configure("Inner.TFrame", background=self.palette["panel_2"])
         style.configure("TLabel", background=self.palette["bg"], foreground=self.palette["text"], font=("Segoe UI", 10))
-        style.configure("HeroTitle.TLabel", background=self.palette["bg"], foreground=self.palette["accent"], font=("Consolas", 18, "bold"))
-        style.configure("Section.TLabel", background=self.palette["bg"], foreground=self.palette["text"], font=("Segoe UI", 12, "bold"))
+        style.configure("HeroTitle.TLabel", background=self.palette["bg"], foreground=self.palette["accent"], font=("Consolas", 19, "bold"))
+        style.configure("Section.TLabel", background=self.palette["bg"], foreground=self.palette["text"], font=("Segoe UI", 11, "bold"))
         style.configure("Muted.TLabel", background=self.palette["bg"], foreground=self.palette["muted"], font=("Segoe UI", 9))
         style.configure("TNotebook", background=self.palette["bg"], borderwidth=0)
         style.configure(
             "TNotebook.Tab",
             background=self.palette["panel_2"],
             foreground=self.palette["muted"],
-            padding=(14, 8),
-            font=("Segoe UI", 10, "bold"),
+            padding=(16, 9),
+            font=("Segoe UI", 10),
         )
         style.map(
             "TNotebook.Tab",
-            background=[("selected", self.palette["accent"])],
-            foreground=[("selected", self.palette["bg"])],
+            background=[("selected", self.palette["panel"])],
+            foreground=[("selected", self.palette["accent"])],
         )
-        style.configure("TButton", background=self.palette["panel_2"], foreground=self.palette["text"], padding=(12, 8), relief="flat")
+        style.configure("TButton", background=self.palette["panel"], foreground=self.palette["text"], padding=(12, 8), relief="flat")
         style.map(
             "TButton",
-            background=[("active", self.palette["accent_2"])],
-            foreground=[("active", self.palette["bg"])],
+            background=[("active", self.palette["panel_2"])],
+            foreground=[("active", self.palette["text"])],
         )
         style.configure("TCheckbutton", background=self.palette["panel"], foreground=self.palette["text"], font=("Segoe UI", 10))
         style.map("TCheckbutton", foreground=[("active", self.palette["accent"])])
-        style.configure("TLabelframe", background=self.palette["panel"], foreground=self.palette["accent"], borderwidth=1, relief="solid")
+        style.configure("TLabelframe", background=self.palette["panel"], foreground=self.palette["accent"], borderwidth=0, relief="flat")
         style.configure("TLabelframe.Label", background=self.palette["panel"], foreground=self.palette["accent"], font=("Segoe UI", 10, "bold"))
         style.configure("TEntry", fieldbackground=self.palette["entry"], foreground=self.palette["text"], insertcolor=self.palette["text"])
         style.configure("TScrollbar", background=self.palette["panel"], troughcolor=self.palette["bg"], arrowcolor=self.palette["text"])
@@ -531,11 +535,11 @@ class LauncherApp(tk.Tk):
         scroll.pack(side="right", fill="y")
         self.log_text.configure(yscrollcommand=scroll.set)
         self.log_text.configure(
-            bg="#120f0d",
-            fg="#f2e7d5",
-            insertbackground="#f2e7d5",
+            bg=self.palette["entry"],
+            fg=self.palette["text"],
+            insertbackground=self.palette["text"],
             highlightthickness=1,
-            highlightbackground="#4a392d",
+            highlightbackground="#ddd6c9",
             relief="flat",
             font=("Consolas", 10),
         )
